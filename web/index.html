@@ -132,6 +132,11 @@ tfoot .pct{display:block;font-size:11px;font-weight:500}
 .paste.drag{border-color:var(--accent);background:var(--accent-soft)}
 .paste textarea{background:var(--surface);min-height:84px}
 .paste .hint{font-size:13px;color:var(--muted)}
+.xlsrow{display:flex;flex-wrap:wrap;gap:8px 12px;align-items:center}
+.xlsrow .btn{min-height:46px;font-size:15px}
+.or{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em}
+.or::before,.or::after{content:"";flex:1;border-top:1px solid var(--line)}
+.pvsrc{font-size:13px;color:var(--muted)}
 .pv{border:1px solid var(--accent);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;background:var(--surface)}
 .pvhead{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;justify-content:space-between}
 .pvhead b{font:700 16px var(--display)}
@@ -182,7 +187,8 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 
   <div class="note" id="sampleNote" hidden>
     <span>Tabloda <b>örnek öğrenciler</b> var. Kendi listeni eklemeden önce temizleyebilirsin.</span>
-    <button class="btn small" id="clearSample">Örnekleri temizle</button>
+    <span class="row"><button class="btn small primary" id="xlsBtn2">📊 Excel'den öğrenci ekle</button>
+    <button class="btn small" id="clearSample">Örnekleri temizle</button></span>
   </div>
 
   <details class="panel" id="setPanel">
@@ -201,17 +207,23 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
     <summary><span>Öğrenci listesi</span><span class="msg" id="stuCount"></span></summary>
     <div class="pbody">
       <div class="paste" id="pasteZone">
+        <div class="xlsrow">
+          <button class="btn primary" id="xlsBtn">📊 Excel'den öğrenci ekle</button>
+          <span class="hint">e-Okul'dan indirdiğin .xls / .xlsx listesini seç</span>
+          <input type="file" id="xlsIn" accept=".xlsx,.xls,.ods,.csv,.txt,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+        </div>
+        <div class="or"><span>ya da</span></div>
         <label class="field" for="namesIn"><span>Excel, Google E-Tablolar ya da e-Okul'dan öğrenci satırlarını seç, kopyala ve buraya yapıştır</span></label>
         <textarea id="namesIn" placeholder="Buraya yapıştır ya da her satıra bir isim yaz"></textarea>
         <div class="hint">Bütün tabloyu kopyalaman yeterli: sıra no, okul no, ad ve soyad sütunları kendiliğinden ayrılır, başlık satırı atlanır. Sayfanın herhangi bir yerinde Ctrl+V da çalışır. Puanları da Excel'den kopyalayıp bir puan hücresine yapıştırabilirsin.</div>
         <div class="row">
-          <button class="btn primary" id="addNames">Listeyi oku</button>
+          <button class="btn" id="addNames">Listeyi oku</button>
           <button class="btn" id="clipBtn" hidden>📋 Panodan yapıştır</button>
           <button class="btn small" id="sortAZ">A→Z sırala</button>
         </div>
       </div>
       <div class="pv" id="pv" hidden>
-        <div class="pvhead"><b id="pvTitle"></b>
+        <div class="pvhead"><span style="display:flex;flex-direction:column;min-width:0"><b id="pvTitle"></b><span class="pvsrc" id="pvSrc" hidden></span></span>
           <label><input type="checkbox" id="pvCase"> Büyük harfleri düzelt (AYŞE → Ayşe)</label></div>
         <div class="pvlist" id="pvList"></div>
         <div class="row">
@@ -248,7 +260,7 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 <div id="sign">Made by Us</div>
 
 <script>
-const APP_VERSION = '1.1.0';
+const APP_VERSION = '1.2.0';
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !location.hostname.endsWith('claude.ai') && !location.hostname.endsWith('claudeusercontent.com')) {
@@ -302,7 +314,7 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<':
 function renderTable() {
   const e = ex(); clampCur();
   if (!e.students.length) {
-    $('tbl').innerHTML = `<tbody><tr><td class="empty">Henüz öğrenci yok. Excel ya da e-Okul'dan öğrenci satırlarını kopyalayıp bu sayfaya yapıştır (Ctrl+V).</td></tr></tbody>`;
+    $('tbl').innerHTML = `<tbody><tr><td class="empty">Henüz öğrenci yok. “Öğrenci listesi” bölümünden Excel dosyasını seç ya da satırları kopyalayıp bu sayfaya yapıştır.</td></tr></tbody>`;
     $('stuPanel').open = true; updVoiceWhere(); return;
   }
   const ro = listening ? ' readonly' : '';
@@ -470,7 +482,7 @@ function parseRoster(text, html) {
   const grid = toGrid(text, html); if (!grid.length) return [];
   const ncol = Math.max(...grid.map(r => r.length));
   let head = -1;
-  for (let i = 0; i < Math.min(6, grid.length); i++) {
+  for (let i = 0; i < Math.min(12, grid.length); i++) {
     const cells = grid[i].filter(Boolean).map(c => lower(c).replace(/[:.]+$/, ''));
     if (cells.length && cells.some(c => HEAD_NAME.test(c) || HEAD_NO.test(c)) && !cells.some(c => isNumC(c))) head = i;
   }
@@ -516,7 +528,9 @@ function parseRoster(text, html) {
   return out;
 }
 let pvItems = [];
-function showPreview(items) {
+function showPreview(items, src) {
+  $('toast').hidden = true;
+  $('pvSrc').hidden = !src; $('pvSrc').textContent = src || '';
   const e = ex();
   const have = new Set(e.sample ? [] : e.students.map(s => norm(s.name)));
   const seen = new Set();
@@ -589,14 +603,42 @@ document.addEventListener('paste', ev => {
   if (t.id === 'namesIn') { $('namesIn').value = text; }
   readRoster(text, html);
 });
+/* ================= Excel dosyasından ekleme ================= */
+let xlsxP = null;
+function loadXLSX() {
+  if (window.XLSX) return Promise.resolve();
+  if (xlsxP) return xlsxP;
+  const tryLoad = src => new Promise((ok, no) => { const sc = document.createElement('script'); sc.src = src; sc.onload = () => window.XLSX ? ok() : no(); sc.onerror = () => { sc.remove(); no(); }; document.head.appendChild(sc); });
+  xlsxP = tryLoad('xlsx.full.min.js').catch(() => tryLoad('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js')).catch(e => { xlsxP = null; throw e; });
+  return xlsxP;
+}
+async function importFile(f) {
+  if (!f) return;
+  if (/\.(csv|txt|tsv)$/i.test(f.name)) { const t = await f.text(); $('namesIn').value = t; const it = parseRoster(t); it.length ? showPreview(it, 'Dosya: ' + f.name) : toast('Dosyada öğrenci adı bulunamadı'); return; }
+  toast('Excel dosyası okunuyor…');
+  try { await loadXLSX(); } catch (e) { toast('Excel okuyucu yüklenemedi. İnternet bağlantını kontrol edip tekrar dene'); return; }
+  let wb;
+  try { wb = XLSX.read(await f.arrayBuffer(), { type: 'array' }); } catch (e) { toast('Dosya açılamadı. Excel dosyası olduğundan emin ol'); return; }
+  let best = null;
+  wb.SheetNames.forEach(n => {
+    const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '', blankrows: false });
+    const text = rows.map(r => r.map(c => String(c).replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
+    const items = parseRoster(text), good = items.filter(x => x.ok).length;
+    if (!best || good > best.good) best = { n, items, good };
+  });
+  if (!best || !best.items.length) { toast('Dosyada öğrenci adı bulunamadı'); return; }
+  showPreview(best.items, 'Dosya: ' + f.name + (wb.SheetNames.length > 1 ? ' · Sayfa: ' + best.n : ''));
+}
+$('xlsBtn').onclick = () => $('xlsIn').click();
+$('xlsBtn2').onclick = () => { $('stuPanel').open = true; $('xlsIn').click(); };
+$('xlsIn').onchange = () => { const f = $('xlsIn').files[0]; $('xlsIn').value = ''; importFile(f); };
 const pz = $('pasteZone');
 pz.addEventListener('dragover', ev => { ev.preventDefault(); pz.classList.add('drag'); });
 pz.addEventListener('dragleave', () => pz.classList.remove('drag'));
 pz.addEventListener('drop', ev => {
   ev.preventDefault(); pz.classList.remove('drag');
   const f = ev.dataTransfer.files && ev.dataTransfer.files[0];
-  if (f) { if (!/\.(csv|txt|tsv)$/i.test(f.name)) { toast('CSV ya da TXT dosyası bırak; Excel için satırları kopyalayıp yapıştır'); return; }
-    const rd = new FileReader(); rd.onload = () => { $('namesIn').value = rd.result; readRoster(rd.result); }; rd.readAsText(f, 'utf-8'); return; }
+  if (f) { importFile(f); return; }
   const t = ev.dataTransfer.getData('text/plain'), h = ev.dataTransfer.getData('text/html'); if (t || h) { $('namesIn').value = t; readRoster(t, h); }
 });
 $('sortAZ').onclick = () => { ex().students.sort((a, b) => a.name.localeCompare(b.name, 'tr')); save(); render(); };
