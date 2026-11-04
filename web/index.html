@@ -175,6 +175,7 @@ tfoot .pct{display:block;font-size:11px;font-weight:500}
 td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 #sign{position:fixed;right:12px;bottom:8px;font:700 12px var(--body);color:var(--ink);opacity:.45;pointer-events:none;z-index:50;
   margin-bottom:env(safe-area-inset-bottom,0px);margin-right:env(safe-area-inset-right,0px)}
+#toast .tact{margin-left:10px;border:0;border-radius:8px;padding:5px 10px;background:var(--accent);color:var(--surface);font:700 13px var(--body)}
 #toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
   padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
 @media (max-width:520px){.vopts{display:none}#micBtn{width:52px;height:52px}}
@@ -254,17 +255,16 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
         </div>
         <div class="or"><span>ya da</span></div>
         <label class="field" for="namesIn"><span>Excel, Google E-Tablolar ya da e-Okul'dan öğrenci satırlarını seç, kopyala ve buraya yapıştır</span></label>
-        <textarea id="namesIn" placeholder="Buraya yapıştır ya da her satıra bir isim yaz"></textarea>
-        <div class="hint">Bütün tabloyu kopyalaman yeterli: sıra no, okul no, ad ve soyad sütunları kendiliğinden ayrılır, başlık satırı atlanır. Sayfanın herhangi bir yerinde Ctrl+V da çalışır. Puanları da Excel'den kopyalayıp bir puan hücresine yapıştırabilirsin.</div>
+        <textarea id="namesIn" placeholder="Basılı tut → Yapıştır, ya da her satıra bir isim yaz"></textarea>
+        <div class="hint">Bütün tabloyu kopyalaman yeterli: sıra no, okul no, ad ve soyad sütunları kendiliğinden ayrılır, başlık satırı atlanır. Yapıştırınca öğrenciler kendiliğinden eklenir; kutu boşken “Listeye ekle” panodakini alır. Puanları da Excel'den kopyalayıp bir puan hücresine yapıştırabilirsin.</div>
         <div class="row">
-          <button class="btn" id="addNames">Listeyi oku</button>
-          <button class="btn" id="clipBtn" hidden>📋 Panodan yapıştır</button>
+          <button class="btn primary" id="addNames">➕ Listeye ekle</button>
           <button class="btn small" id="sortAZ">A→Z sırala</button>
         </div>
       </div>
       <div class="pv" id="pv" hidden>
         <div class="pvhead"><span style="display:flex;flex-direction:column;min-width:0"><b id="pvTitle"></b><span class="pvsrc" id="pvSrc" hidden></span></span>
-          <label><input type="checkbox" id="pvCase"> Büyük harfleri düzelt (AYŞE → Ayşe)</label></div>
+          <label><input type="checkbox" id="pvCase"> Harfleri düzelt (AYŞE → Ayşe)</label></div>
         <div class="pvlist" id="pvList"></div>
         <div class="row">
           <button class="btn primary" id="pvAdd">Ekle</button>
@@ -345,7 +345,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.5.0';
+const APP_VERSION = '1.5.1';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -739,8 +739,11 @@ function showPreview(items, src) {
   const seen = new Set();
   items.forEach(it => { const k = norm(it.name); if (have.has(k)) { it.ok = false; it.why = 'zaten listede'; } else if (seen.has(k)) { it.ok = false; it.why = 'iki kez var'; } seen.add(k); });
   pvItems = items;
-  const caps = items.filter(it => it.name === it.name.toLocaleUpperCase('tr')).length > items.length / 2;
+  const caps = items.filter(it => it.name === it.name.toLocaleUpperCase('tr') || it.name === it.name.toLocaleLowerCase('tr')).length > items.length / 2;
   $('pvCase').checked = caps; $('pvCase').parentElement.hidden = !caps;
+  pvItems = items;
+  // her şey yolundaysa onay sormadan ekle (tek dokunuş); sorunlu satır varsa listeyi göster
+  if (items.length && items.every(it => it.ok)) { takePreview(false); return; }
   drawPreview();
   $('pv').hidden = false; $('stuPanel').open = true; $('pv').scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 }
@@ -756,17 +759,28 @@ $('pvList').addEventListener('change', ev => { const i = ev.target.dataset.pv; i
 $('pvCase').onchange = drawPreview;
 function takePreview(replace) {
   const k = cls(), fix = $('pvCase').checked;
-  const chosen = pvItems.filter(x => x.ok).map(x => ({ name: fix ? titleTR(x.name) : x.name, no: x.no }));
+  const capW = n => n.split(' ').map(w => w ? w[0].toLocaleUpperCase('tr') + w.slice(1) : w).join(' ');
+  const chosen = pvItems.filter(x => x.ok).map(x => ({ name: fix ? titleTR(x.name) : capW(x.name), no: x.no }));
   if (!chosen.length) return;
   if (k.sample) { clearClassStudents(k); k.sample = false; replace = false; }
   if (replace) {
     const old = new Map(k.students.map(s => [norm(s.name), s])), keep = new Set();
     k.students = chosen.map(c => { const o = old.get(norm(c.name)); if (o) { keep.add(o.id); return Object.assign(o, { name: c.name, no: c.no || o.no || '' }); } return { id: uid(), name: c.name, no: c.no || '' }; });
     D.exams.forEach(e => { if (e.classId === k.id) Object.keys(e.scores).forEach(id => { if (!keep.has(id) && !k.students.some(s => s.id === id)) delete e.scores[id]; }); });
-  } else chosen.forEach(c => k.students.push({ id: uid(), name: c.name, no: c.no || '' }));
+  }
+  const added = [], oldName = k.name;
+  if (!replace) chosen.forEach(c => { const st = { id: uid(), name: c.name, no: c.no || '' }; k.students.push(st); added.push(st.id); });
   if (pvClassName && (/^(yeni sınıf|sınıf \d+)$/i.test(k.name) || !k.name)) k.name = pvClassName;
   $('pv').hidden = true; $('namesIn').value = ''; pvItems = []; pvClassName = '';
-  save(); render(); toast((replace ? `${k.name} listesi güncellendi: ` : `${k.name} sınıfına eklendi: `) + chosen.length + ' öğrenci');
+  save(); render();
+  const what = chosen.length === 1 ? chosen[0].name : chosen.length + ' öğrenci';
+  if (replace) { toast(`${k.name} listesi güncellendi: ${chosen.length} öğrenci`); return; }
+  toast(`✓ ${what} ${k.name} sınıfına eklendi`, 'Geri al', () => {
+    const ids = new Set(added); k.students = k.students.filter(st => !ids.has(st.id)); k.name = oldName;
+    D.exams.forEach(e => { if (e.classId === k.id) ids.forEach(id => delete e.scores[id]); });
+    save(); render(); toast('Geri alındı');
+  });
+  const tb = document.querySelector('.tblwrap'); if (tb && added.length) { const r = k.students.length - 1; setTimeout(() => { const c = $('c' + r + '_0'); c && c.parentElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); }, 50); }
 }
 function clearClassStudents(k) { k.students = []; D.exams.forEach(e => { if (e.classId === k.id) e.scores = {}; }); }
 $('pvAdd').onclick = () => takePreview(false);
@@ -788,14 +802,21 @@ function readRoster(text, html) {
   if (!items.length) { toast('Yapıştırılan metinde isim bulunamadı'); return false; }
   showPreview(items); return true;
 }
-$('addNames').onclick = () => { if (!$('namesIn').value.trim()) { toast('Önce listeyi kutuya yapıştır'); $('namesIn').focus(); return; } readRoster($('namesIn').value); };
-try { $('clipBtn').hidden = !isApk() && (window.self !== window.top || !(navigator.clipboard && navigator.clipboard.readText)); } catch (e) {}
-$('clipBtn').onclick = async () => {
-  try {
-    const CB = isApk() && window.Capacitor.Plugins && window.Capacitor.Plugins.Clipboard;
-    const t = CB ? ((await CB.read()) || {}).value || '' : await navigator.clipboard.readText(); if (!t.trim()) { toast('Pano boş. Önce tabloyu kopyala'); return; } $('namesIn').value = t; readRoster(t); }
-  catch (e) { toast('Panoya erişilemedi. Kutuya basılı tut → Yapıştır'); $('namesIn').focus(); }
+async function readClipboard() {
+  const CB = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Clipboard;
+  if (CB) { try { const r = await CB.read(); if (r && r.value) return r.value; } catch (e) {} }
+  if (navigator.clipboard && navigator.clipboard.readText) { try { return await navigator.clipboard.readText(); } catch (e) {} }
+  return null;
+}
+$('addNames').onclick = async () => {
+  const typed = $('namesIn').value;
+  if (typed.trim()) { readRoster(typed); return; }
+  const t = await readClipboard();
+  if (t && t.trim()) { readRoster(t); return; }
+  $('namesIn').focus();
+  toast(t === null ? 'Kutuya basılı tutup “Yapıştır”ı seç; öğrenci kendiliğinden eklenir' : 'Pano boş. Önce ismi ya da tabloyu kopyala');
 };
+$('namesIn').addEventListener('keydown', ev => { if (ev.key === 'Enter' && (ev.ctrlKey || ev.metaKey)) { ev.preventDefault(); $('addNames').click(); } });
 /* Puan hücresine yapıştırma: Excel'deki puan bloğunu imleçten itibaren doldurur */
 function pasteScores(text, html) {
   const grid = toGrid(text, html); const e = ex();
@@ -1073,7 +1094,11 @@ function beep(f, d = .12) {
     o.frequency.value = f; g.gain.value = .06; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + d); } catch (e) {}
 }
 let wl; async function wake() { try { wl = await navigator.wakeLock.request('screen'); } catch (e) {} }
-let toastT; function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2600); }
+let toastT; function toast(t, action, fn) {
+  const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT);
+  if (action) { const b = document.createElement('button'); b.className = 'tact'; b.textContent = action; b.onclick = () => { el.hidden = true; fn(); }; el.append(' ', b); }
+  toastT = setTimeout(() => el.hidden = true, action ? 6000 : 2600);
+}
 
 /* ================= Güncelleme ================= */
 function cmpVer(a, b) { const pa = a.split('.').map(Number), pb = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); } return 0; }
