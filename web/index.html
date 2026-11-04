@@ -179,23 +179,31 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 #toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
   padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
 @media (max-width:520px){.vopts{display:none}#micBtn{width:52px;height:52px}}
+
+/* sade düzen */
+header.top{flex-direction:column;align-items:stretch;gap:6px}
+header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;background:transparent;padding:2px 0;border-bottom:2px dashed transparent;width:100%;min-width:0}
+.btn.big{min-height:50px;font-size:16px;justify-content:center;width:100%}
+.paste{border:0;padding:0;background:none;gap:10px}
+.paste.drag{outline:2px dashed var(--accent);outline-offset:6px}
+.opts{flex-direction:column;align-items:flex-start;gap:8px;font-size:14px}
+.opts label{display:flex;gap:8px;align-items:center;cursor:pointer}
+.help{display:flex;flex-direction:column;gap:6px}
+.help b{font-size:14px;color:var(--ink)}
+#stuPanel[open]>summary,#setPanel[open]>summary{border-bottom:1px solid var(--line);margin-bottom:12px}
 </style>
 </head>
 <body>
 <div class="wrap">
+  <nav class="classbar" id="classBar" role="tablist" aria-label="Sınıflar"></nav>
   <header class="top">
-    <div class="brand" style="flex:1;min-width:220px">
-      <small id="brandSmall">Sınav Puan Tablosu</small>
-      <input id="examName" aria-label="Sınavın adı" value="">
+    <small id="brandSmall" hidden></small>
+    <input id="examName" aria-label="Sınavın adı (dokunup değiştirebilirsin)" value="">
+    <div class="examrow">
+      <select id="examSel" class="btn small" aria-label="Bu sınıfın sınavları"></select>
+      <button class="btn small" id="newExam">＋ Yeni sınav</button>
     </div>
   </header>
-  <nav class="classbar" id="classBar" role="tablist" aria-label="Sınıflar"></nav>
-  <div class="examrow">
-    <span class="lbl">Sınav</span>
-    <select id="examSel" class="btn small" aria-label="Bu sınıfın sınavları"></select>
-    <button class="btn small" id="newExam">＋ Yeni sınav</button>
-    <button class="btn small" id="updBtn" style="margin-left:auto">🔄 Güncelle</button>
-  </div>
   <div class="msg" id="updmsg" hidden></div>
 
   <section class="voice" aria-live="polite">
@@ -203,64 +211,33 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
     </button>
     <div class="vtext">
-      <div id="vWhere">Bir hücreye dokun, sonra mikrofona bas</div>
-      <div id="vHeard">Söyle: “15”, “sekiz buçuk”, “tam”, “geç”, “geri”, “sil” ya da öğrencinin adı</div>
-    </div>
-    <div class="vopts">
-      <label><input type="checkbox" id="optSpeak"> Sesli tekrar</label>
-      <label><input type="checkbox" id="optAuto" checked> Sonrakine geç</label>
+      <div id="vWhere">Bir hücreye dokun</div>
+      <div id="vHeard">Mikrofona bas, puanı söyle: “15”, “tam”, “geç”</div>
     </div>
   </section>
 
   <div class="note" id="sampleNote" hidden>
-    <span>Tabloda <b>örnek öğrenciler</b> var. Kendi listeni eklemeden önce temizleyebilirsin.</span>
-    <span class="row"><button class="btn small primary" id="xlsBtn2">📊 Excel'den öğrenci ekle</button>
-    <button class="btn small" id="clearSample">Örnekleri temizle</button></span>
+    <span>Bunlar <b>örnek</b> öğrenciler.</span>
+    <span class="row"><button class="btn small primary" id="xlsBtn2">Kendi listemi ekle</button>
+    <button class="btn small" id="clearSample">Örnekleri sil</button></span>
   </div>
 
-  <details class="panel" id="setPanel">
-    <summary><span>Sorular, sütunlar ve puanları</span><span class="sumpill" id="sumPill">Toplam 100</span></summary>
-    <div class="pbody">
-      <div class="row">
-        <label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Sütun sayısı</span>
-          <input class="numin" id="qCount" type="number" min="1" max="30" inputmode="numeric"></label>
-        <span class="msg">Sütun adına dokunup değiştirebilirsin</span>
-        <button class="btn small" id="evenPts">Puanları eşit dağıt (100)</button>
-      </div>
-      <div class="qpts" id="qpts"></div>
-      <div class="addcols" id="addCols">
-        <span class="lbl">Sütun ekle:</span>
-        <button class="btn small" data-add="">＋ Soru</button>
-        <button class="btn small" data-add="Okuma">＋ Okuma</button>
-        <button class="btn small" data-add="Konuşma">＋ Konuşma</button>
-        <button class="btn small" data-add="Dinleme">＋ Dinleme</button>
-        <button class="btn small" data-add="Yazma">＋ Yazma</button>
-        <button class="btn small" data-add="?">＋ Başka bir sütun</button>
-      </div>
-    </div>
-  </details>
+  <div class="tblwrap"><table id="tbl"></table></div>
+
+  <div class="row">
+    <button class="btn" id="copyBtn">📋 Excel'e kopyala</button>
+  </div>
+  <textarea id="copyArea" readonly hidden style="min-height:120px;font:500 12px var(--mono)"></textarea>
 
   <details class="panel" id="stuPanel">
-    <summary><span id="stuTitle">Öğrenci listesi</span><span class="msg" id="stuCount"></span></summary>
+    <summary><span id="stuTitle">Öğrenciler</span><span class="msg" id="stuCount"></span></summary>
     <div class="pbody">
-      <div class="clsname">
-        <label class="field"><span>Sınıfın adı</span><input id="clsName" placeholder="7/B" autocomplete="off"></label>
-        <button class="btn small danger" id="delClass">Bu sınıfı sil</button>
-      </div>
       <div class="paste" id="pasteZone">
-        <div class="xlsrow">
-          <button class="btn primary" id="xlsBtn">📊 Excel'den öğrenci ekle</button>
-          <span class="hint">e-Okul'dan indirdiğin .xls / .xlsx listesini seç</span>
-          <input type="file" id="xlsIn" accept=".xlsx,.xls,.ods,.csv,.txt,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-        </div>
+        <button class="btn primary big" id="xlsBtn">📊 Excel dosyasından ekle</button>
+        <input type="file" id="xlsIn" accept=".xlsx,.xls,.ods,.csv,.txt,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
         <div class="or"><span>ya da</span></div>
-        <label class="field" for="namesIn"><span>Excel, Google E-Tablolar ya da e-Okul'dan öğrenci satırlarını seç, kopyala ve buraya yapıştır</span></label>
-        <textarea id="namesIn" placeholder="Basılı tut → Yapıştır, ya da her satıra bir isim yaz"></textarea>
-        <div class="hint">Bütün tabloyu kopyalaman yeterli: sıra no, okul no, ad ve soyad sütunları kendiliğinden ayrılır, başlık satırı atlanır. Yapıştırınca öğrenciler kendiliğinden eklenir; kutu boşken “Listeye ekle” panodakini alır. Puanları da Excel'den kopyalayıp bir puan hücresine yapıştırabilirsin.</div>
-        <div class="row">
-          <button class="btn primary" id="addNames">➕ Listeye ekle</button>
-          <button class="btn small" id="sortAZ">A→Z sırala</button>
-        </div>
+        <textarea id="namesIn" aria-label="Öğrenci isimleri" placeholder="İsimleri buraya yapıştır ya da yaz (her satıra bir isim)"></textarea>
+        <button class="btn primary big" id="addNames">➕ Listeye ekle</button>
       </div>
       <div class="pv" id="pv" hidden>
         <div class="pvhead"><span style="display:flex;flex-direction:column;min-width:0"><b id="pvTitle"></b><span class="pvsrc" id="pvSrc" hidden></span></span>
@@ -272,28 +249,54 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
           <button class="btn small" id="pvCancel">Vazgeç</button>
         </div>
       </div>
+      <div class="clsname">
+        <label class="field"><span>Sınıfın adı</span><input id="clsName" placeholder="7/B" autocomplete="off"></label>
+        <button class="btn small" id="sortAZ">A→Z sırala</button>
+      </div>
     </div>
   </details>
 
-  <div class="tblwrap"><table id="tbl"></table></div>
+  <details class="panel" id="setPanel">
+    <summary><span>Sorular ve puanlar</span><span class="sumpill" id="sumPill">Toplam 100</span></summary>
+    <div class="pbody">
+      <div class="row">
+        <label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Soru sayısı</span>
+          <input class="numin" id="qCount" type="number" min="1" max="30" inputmode="numeric"></label>
+        <button class="btn small" id="evenPts">Eşit dağıt</button>
+      </div>
+      <div class="qpts" id="qpts"></div>
+      <div class="addcols" id="addCols">
+        <button class="btn small" data-add="">＋ Soru</button>
+        <button class="btn small" data-add="Okuma">＋ Okuma</button>
+        <button class="btn small" data-add="Konuşma">＋ Konuşma</button>
+        <button class="btn small" data-add="Dinleme">＋ Dinleme</button>
+        <button class="btn small" data-add="Yazma">＋ Yazma</button>
+        <button class="btn small" data-add="?">＋ Diğer</button>
+      </div>
+    </div>
+  </details>
 
-  <div class="row">
-    <button class="btn" id="copyBtn">📋 Excel'e kopyala</button>
-    <button class="btn" id="csvBtn">⬇ CSV indir</button>
-    <span style="flex:1"></span>
-    <button class="btn small danger" id="clearScores">Puanları sıfırla</button>
-    <button class="btn small danger" id="delExam">Bu sınavı sil</button>
-  </div>
-  <textarea id="copyArea" readonly hidden style="min-height:120px;font:500 12px var(--mono)"></textarea>
-
-  <details class="panel">
-    <summary><span>Sesle giriş nasıl çalışır?</span></summary>
-    <div class="pbody help">
-      <div>Mikrofona bas, seçili hücreden başlayarak puanları söyle. Her puandan sonra sıradaki soruya, son sorudan sonra sıradaki öğrenciye geçilir.</div>
-      <div>Bir öğrencinin adını söylersen ona atlar: <code>Ayşe 10 8 15</code> Ayşe'nin ilk üç sorusunu doldurur.</div>
-      <div><code>tam</code> sorunun tam puanını yazar · <code>sıfır</code> 0 yazar · <code>buçuk</code> yarım puan ekler · <code>geç</code> boş bırakıp ilerler · <code>geri</code> bir önceki hücreye döner · <code>sil</code> hücreyi boşaltır · <code>dur</code> dinlemeyi kapatır.</div>
-      <div>Adlandırılmış sütunlara adıyla geçilir: <code>okuma 18</code>, <code>speaking 20</code>, <code>Ayşe konuşma 15</code>.</div>
-      <div>Sorunun puanından büyük bir sayı söylenirse yazılmaz, uyarı verilir. Ses tanıma Chrome tarayıcıda ve Android uygulamasında çalışır; internet gerektirebilir.</div>
+  <details class="panel" id="morePanel">
+    <summary><span>Diğer</span></summary>
+    <div class="pbody">
+      <div class="row">
+        <button class="btn small" id="updBtn">🔄 Güncelle</button>
+        <button class="btn small" id="csvBtn">⬇ CSV indir</button>
+      </div>
+      <div class="row opts">
+        <label><input type="checkbox" id="optAuto" checked> Puandan sonra sıradakine geç</label>
+        <label><input type="checkbox" id="optSpeak"> Puanı sesli tekrar et</label>
+      </div>
+      <div class="help">
+        <b>Sesle giriş</b>
+        <div><code>15</code> <code>sekiz buçuk</code> <code>tam</code> puan yazar · <code>geç</code> <code>geri</code> <code>sil</code> <code>dur</code></div>
+        <div>Öğrencinin ya da sütunun adını söyle: <code>Ayşe 10 8 15</code> · <code>okuma 18</code> · <code>3. soru 12</code></div>
+      </div>
+      <div class="row">
+        <button class="btn small danger" id="clearScores">Puanları sıfırla</button>
+        <button class="btn small danger" id="delExam">Bu sınavı sil</button>
+        <button class="btn small danger" id="delClass">Bu sınıfı sil</button>
+      </div>
     </div>
   </details>
 </div>
@@ -345,7 +348,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.5.1';
+const APP_VERSION = '1.6.0';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -441,7 +444,7 @@ function render() {
   $('examSel').value = e.id;
   $('sampleNote').hidden = !k.sample;
   if (document.activeElement !== $('clsName')) $('clsName').value = k.name;
-  $('stuTitle').textContent = (k.name || 'Sınıf') + ' öğrenci listesi';
+  $('stuTitle').textContent = 'Öğrenciler';
   $('qCount').value = e.points.length;
   const L = labelsOf(e);
   $('qpts').innerHTML = e.points.map((p, i) => `<div class="qcol${L[i] ? ' skill' : ''}">
@@ -457,8 +460,9 @@ function render() {
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function renderTable() {
   const e = ex(); clampCur();
+  $('copyBtn').parentElement.hidden = !e.students.length;
   if (!e.students.length) {
-    $('tbl').innerHTML = `<tbody><tr><td class="empty">Bu sınıfta henüz öğrenci yok. Aşağıdaki öğrenci listesi bölümünden Excel dosyasını seç ya da satırları kopyalayıp bu sayfaya yapıştır.</td></tr></tbody>`;
+    $('tbl').innerHTML = `<tbody><tr><td class="empty">Bu sınıfta henüz öğrenci yok. Aşağıdaki <b>Öğrenciler</b> bölümünden ekle.</td></tr></tbody>`;
     $('stuPanel').open = true; updVoiceWhere(); return;
   }
   const ro = listening ? ' readonly' : '';
@@ -598,13 +602,13 @@ function addClass() {
   const e = newExamFor(k, pts, lbs); D.exams.push(e);
   D.curClass = k.id; D.cur = e.id; k.lastExam = e.id; cur = { r: 0, c: 0 }; $('pv').hidden = true;
   save(); render(); $('stuPanel').open = true;
-  $('clsName').focus(); $('clsName').select();
-  toast('Yeni sınıf açıldı. Adını yaz, sonra listesini yükle');
+  $('clsName').focus(); $('clsName').select(); $('clsName').scrollIntoView({ block: 'center', behavior: 'smooth' });
+  toast('Yeni sınıf açıldı. Adını yaz, sonra öğrencileri ekle');
 }
 $('clsName').addEventListener('input', () => {
   const k = cls(); k.name = $('clsName').value.trim();
   const t = document.querySelector(`[data-cls="${k.id}"]`); if (t) t.firstChild.textContent = (k.name || 'Adsız sınıf') + ' ';
-  $('stuTitle').textContent = (k.name || 'Sınıf') + ' öğrenci listesi'; $('brandSmall').textContent = (k.name || 'Adsız sınıf') + ' · Sınav Puan Tablosu'; save();
+  $('stuTitle').textContent = 'Öğrenciler'; $('brandSmall').textContent = (k.name || 'Adsız sınıf') + ' · Sınav Puan Tablosu'; save();
 });
 $('clsName').addEventListener('change', () => render());
 $('qCount').addEventListener('change', () => {
@@ -875,7 +879,7 @@ async function importFile(f) {
   showPreview(best.items, 'Dosya: ' + f.name + (wb.SheetNames.length > 1 ? ' · Sayfa: ' + best.n : ''));
 }
 $('xlsBtn').onclick = () => $('xlsIn').click();
-$('xlsBtn2').onclick = () => { $('stuPanel').open = true; $('xlsIn').click(); };
+$('xlsBtn2').onclick = () => { $('stuPanel').open = true; $('pasteZone').scrollIntoView({ block: 'center', behavior: 'smooth' }); };
 $('xlsIn').onchange = () => { const f = $('xlsIn').files[0]; $('xlsIn').value = ''; importFile(f); };
 const pz = $('pasteZone');
 pz.addEventListener('dragover', ev => { ev.preventDefault(); pz.classList.add('drag'); });
