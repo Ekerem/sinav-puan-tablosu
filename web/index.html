@@ -279,7 +279,52 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 <div id="sign">Made by Us</div>
 
 <script>
-const APP_VERSION = '1.3.0';
+/* Canlı güncelleme (yalnız APK): GitHub Pages'teki en yeni sürüm indirilip telefonda saklanır ve APK yeniden
+   kurulmadan çalıştırılır. Öğrenci ve puan kayıtları aynı yerde kalır. Yeni bir Android eklentisi gerektiren
+   sürümlerde version.json içindeki "apkMin" artırılır; yalnız o zaman yeni APK indirilir. */
+if (!window.__live) window.__live = (function () {
+  var K = 'spt-live-', PAGES = 'https://ekerem.github.io/sinav-puan-tablosu/';
+  var L = { bundle: null, started: false };
+  function native() { return !!(window.Capacitor && Capacitor.isNativePlatform && Capacitor.isNativePlatform()); }
+  function cmp(a, b) { a = String(a || '0').split('.'); b = String(b || '0').split('.'); for (var i = 0; i < 3; i++) { var d = (+a[i] || 0) - (+b[i] || 0); if (d) return d; } return 0; }
+  function get(k) { try { return localStorage.getItem(K + k); } catch (e) { return null; } }
+  function set(k, v) { try { if (v == null) localStorage.removeItem(K + k); else localStorage.setItem(K + k, v); } catch (e) {} }
+  async function fetchText(url) {
+    var H = window.Capacitor && Capacitor.Plugins && Capacitor.Plugins.CapacitorHttp;
+    if (H) { var r = await H.get({ url: url, responseType: 'text', headers: { 'Cache-Control': 'no-cache' } }); if (r.status !== 200) throw new Error(r.status); return typeof r.data === 'string' ? r.data : JSON.stringify(r.data); }
+    var r2 = await fetch(url, { cache: 'no-store' }); if (!r2.ok) throw new Error(r2.status); return r2.text();
+  }
+  L.native = native; L.cmp = cmp;
+  /* Uygulama betiği en başta çağırır. Saklanan daha yeni bir sürüm varsa ona geçer ve true döner. */
+  L.start = function (myVer) {
+    if (!native()) return false;
+    if (L.started) { set('ok', myVer); return false; }
+    L.started = true; L.bundle = myVer;
+    var ver = get('ver'), html = get('html');
+    if (ver && get('try') === ver && get('ok') !== ver) { set('html', null); set('ver', null); ver = html = null; } // açılamayan kopya atılır
+    if (html && ver && cmp(ver, myVer) > 0) { set('try', ver); L.swap(html); return true; }
+    set('ok', myVer); return false;
+  };
+  L.swap = function (html) { setTimeout(function () { document.open(); document.write(html); document.close(); }, 0); };
+  /* Pages'i kontrol eder; daha yeni sürüm varsa indirip saklar. {status: 'current' | 'ready' | 'apk'} */
+  L.check = async function (curVer) {
+    var v = JSON.parse(await fetchText(PAGES + 'version.json?t=' + Date.now()));
+    if (cmp(v.version, curVer) <= 0) return { status: 'current', version: v.version };
+    if (v.apkMin && cmp(L.bundle || curVer, v.apkMin) < 0) return { status: 'apk', version: v.version, apk: v.apk };
+    if (get('ver') === v.version && get('html')) return { status: 'ready', version: v.version };
+    var html = await fetchText(PAGES + 'index.html?t=' + Date.now());
+    if (html.indexOf("APP_VERSION = '" + v.version + "'") < 0) throw new Error('sürüm uyuşmuyor');
+    set('html', html); set('ver', v.version); set('try', null);
+    return { status: 'ready', version: v.version };
+  };
+  L.apply = function () { var h = get('html'), v = get('ver'); if (h) { set('try', v); L.swap(h); } };
+  return L;
+})();
+</script>
+<script>
+main: {
+const APP_VERSION = '1.4.0';
+if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !location.hostname.endsWith('claude.ai') && !location.hostname.endsWith('claudeusercontent.com')) {
@@ -585,7 +630,7 @@ function parseRoster(text, html) {
     for (let j = 0; j < ncol; j++) {
       const vals = data.map(r => r[j] || '').filter(Boolean); if (!vals.length) continue;
       const words = vals.filter(v => hasLetter(v) && !isNumC(v));
-      if (words.length / vals.length >= 0.6 && !vals.every(v => v.length <= 2)) nameCols.push(j);
+      if (words.length / vals.length >= 0.6 && !vals.every(v => /^(e|k|kız|erkek|kadın|bay|bayan)$/i.test(lower(v)))) nameCols.push(j);
     }
     // birden fazla yazı sütunu varsa ad/soyad gibi yan yana olanları al, en uzun grubu seç
     if (nameCols.length > 2) nameCols = nameCols.slice(0, 2);
@@ -598,7 +643,9 @@ function parseRoster(text, html) {
       if (vals.length && vals.filter(v => /^\d{1,6}$/.test(v)).length / vals.length >= 0.8) numCols.push(j);
     }
     const seq = j => data.every((r, i) => !r[j] || +r[j] === i + 1);
-    noCol = numCols.find(j => !seq(j)) ?? -1;
+    const cand = numCols.filter(j => !(data.length > 1 && seq(j)));
+    const digits = j => { const v = data.map(r => (r[j] || '').length).filter(Boolean); return v.reduce((a, b) => a + b, 0) / (v.length || 1); };
+    noCol = cand.length ? cand.reduce((a, b) => digits(b) >= digits(a) ? b : a) : -1;
   }
   const out = [];
   data.forEach((r, i) => {
@@ -678,9 +725,11 @@ function readRoster(text, html) {
   showPreview(items); return true;
 }
 $('addNames').onclick = () => { if (!$('namesIn').value.trim()) { toast('Önce listeyi kutuya yapıştır'); $('namesIn').focus(); return; } readRoster($('namesIn').value); };
-try { $('clipBtn').hidden = window.self !== window.top || !(navigator.clipboard && navigator.clipboard.readText); } catch (e) {}
+try { $('clipBtn').hidden = !isApk() && (window.self !== window.top || !(navigator.clipboard && navigator.clipboard.readText)); } catch (e) {}
 $('clipBtn').onclick = async () => {
-  try { const t = await navigator.clipboard.readText(); if (!t.trim()) { toast('Pano boş. Önce tabloyu kopyala'); return; } $('namesIn').value = t; readRoster(t); }
+  try {
+    const CB = isApk() && window.Capacitor.Plugins && window.Capacitor.Plugins.Clipboard;
+    const t = CB ? ((await CB.read()) || {}).value || '' : await navigator.clipboard.readText(); if (!t.trim()) { toast('Pano boş. Önce tabloyu kopyala'); return; } $('namesIn').value = t; readRoster(t); }
   catch (e) { toast('Panoya erişilemedi. Kutuya basılı tut → Yapıştır'); $('namesIn').focus(); }
 };
 /* Puan hücresine yapıştırma: Excel'deki puan bloğunu imleçten itibaren doldurur */
@@ -701,10 +750,14 @@ function pasteScores(text, html) {
 document.addEventListener('paste', ev => {
   const t = ev.target, cd = ev.clipboardData; if (!cd) return;
   const text = cd.getData('text/plain'), html = cd.getData('text/html');
-  if (t.closest && t.closest('#tbl') && t.dataset && t.dataset.r != null) { if (pasteScores(text, html)) ev.preventDefault(); return; }
+  const inCell = t.closest && t.closest('#tbl') && t.dataset && t.dataset.r != null;
+  if (inCell && pasteScores(text, html)) { ev.preventDefault(); return; }
+  if (inCell && !hasLetter(text)) return;
   if (t.id === 'examName' || (t.closest && t.closest('#qpts')) || t.id === 'qCount' || t.id === 'copyArea') return;
   const multi = /\n|\t/.test(text.trim()) || /<t[dh][\s>]/i.test(html);
-  if (t.id !== 'namesIn' && !multi) return;
+  const oneName = /^\s*(\d{1,6}\s*[.)\-–]?\s+)?[\p{L}][\p{L}'’.\- ]{1,60}\s*$/u.test(text) && text.trim().split(/\s+/).length <= 6;
+  if (t.id !== 'namesIn' && !multi && !oneName) return;
+  if (!inCell && t.id !== 'namesIn' && /^(INPUT|TEXTAREA)$/.test(t.tagName) && !multi) return;
   ev.preventDefault();
   if (t.id === 'namesIn') { $('namesIn').value = text; }
   readRoster(text, html);
@@ -946,18 +999,32 @@ let toastT; function toast(t) { const el = $('toast'); el.textContent = t; el.hi
 
 /* ================= Güncelleme ================= */
 function cmpVer(a, b) { const pa = a.split('.').map(Number), pb = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); } return 0; }
+function flushSave() { clearTimeout(saveT); try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) {} }
+function applyLive() { if (listening) stopListening(); flushSave(); window.__live.apply(); }
+function showLiveNote(ver) {
+  const el = $('updmsg'); el.hidden = false;
+  el.innerHTML = `Yeni sürüm (${esc(ver)}) indirildi. <button class="btn small primary" id="liveGo">Şimdi geç</button> <span>ya da uygulamayı yeniden açınca kendiliğinden geçilir.</span>`;
+  $('liveGo').onclick = applyLive;
+}
 async function checkUpdate() {
   const el = $('updmsg'); el.hidden = false;
+  el.textContent = 'Kontrol ediliyor…';
+  if (isApk()) {
+    try {
+      const r = await window.__live.check(APP_VERSION);
+      if (r.status === 'current') el.textContent = 'Uygulama güncel ✓ (sürüm ' + APP_VERSION + ')';
+      else if (r.status === 'ready') { el.textContent = `Sürüm ${r.version} yükleniyor…`; setTimeout(applyLive, 500); }
+      else { el.textContent = `Sürüm ${r.version} yeni Android özellikleri içeriyor, bu sefer uygulamanın bir kez yeniden kurulması gerekiyor. İndirme açılıyor…`; flushSave(); setTimeout(() => { location.href = r.apk; }, 1500); }
+    } catch (e) { el.textContent = 'Güncelleme kontrol edilemedi. İnternet bağlantını kontrol edip tekrar dene.'; }
+    return;
+  }
   const onPages = location.hostname.endsWith('github.io');
   const url = (onPages ? 'version.json' : PAGES_BASE + 'version.json') + '?t=' + Date.now();
-  el.textContent = 'Kontrol ediliyor…';
   try {
     const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
     const v = await r.json();
-    if (cmpVer(v.version, APP_VERSION) > 0) {
-      if (isApk()) { el.textContent = `Yeni sürüm (${v.version}) hazır. İndirme sayfası açılıyor…`; setTimeout(() => { location.href = v.apk; }, 800); }
-      else { el.textContent = `Yeni sürüm (${v.version}) yükleniyor…`; setTimeout(() => location.replace(location.pathname + '?v=' + v.version + '&t=' + Date.now()), 600); }
-    } else el.textContent = 'Uygulama güncel ✓ (sürüm ' + APP_VERSION + ')';
+    if (cmpVer(v.version, APP_VERSION) > 0) { el.textContent = `Yeni sürüm (${v.version}) yükleniyor…`; flushSave(); setTimeout(() => location.replace(location.pathname + '?v=' + v.version + '&t=' + Date.now()), 600); }
+    else el.textContent = 'Uygulama güncel ✓ (sürüm ' + APP_VERSION + ')';
   } catch (e) { el.textContent = 'Güncelleme kontrol edilemedi. İnternet bağlantını kontrol edip tekrar dene.'; }
 }
 $('updBtn').onclick = checkUpdate;
@@ -965,6 +1032,9 @@ $('updBtn').onclick = checkUpdate;
 load(); render();
 try { $('csvBtn').hidden = isApk() || window.self !== window.top; } catch (e) { $('csvBtn').hidden = true; }
 if (ex().students.length) $('setPanel').open = false;
+if (isApk()) setTimeout(() => { window.__live.check(APP_VERSION).then(r => { if (r.status === 'ready') showLiveNote(r.version); }).catch(() => {}); }, 2500);
+window.__app = { ex, cls, get D() { return D; }, get cur() { return cur; }, set cur(v) { cur = v; }, get pvItems() { return pvItems; }, parseSpeech, parseRoster, applySpeech, rows, markCur };
+}
 </script>
 </body>
 </html>

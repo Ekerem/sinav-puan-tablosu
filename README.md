@@ -19,8 +19,16 @@ Sorunun puanından büyük sayı yazılmaz. Web'de Chrome'un ses tanıması, APK
 - Uygulama (GitHub Pages): https://ekerem.github.io/sinav-puan-tablosu/
 - APK indir: https://github.com/Ekerem/sinav-puan-tablosu/releases/latest/download/sinav-puan-tablosu.apk
 
-## Yeni sürüm
-`web/index.html` içindeki `APP_VERSION` ve `web/version.json` aynı anda artırılır ve `main` dalına gönderilir.
-APK iş akışı sürümü `version.json`'dan okuyup `v1.0.1` gibi bir Release oluşturur.
+## Güncelleme
+- **Web:** "🔄 Güncelle" sayfayı en yeni sürümle yeniden yükler.
+- **APK (canlı güncelleme):** Uygulama açılışta GitHub Pages'teki `version.json`'a bakar, yeni sürümün `index.html`'ini indirip
+  telefonda saklar ve bir sonraki açılışta (ya da "Şimdi geç" / "Güncelle" ile hemen) APK yeniden kurulmadan ona geçer.
+  Kayıtlar aynı yerde kalır. Açılamayan bir kopya bir sonraki açılışta atılır, APK'nın içindeki sürüm açılır.
+- Yeni APK yalnızca `version.json` içindeki `apkMin` artırıldığında istenir. Bunu yalnız yeni bir Android eklentisi
+  ya da `index.html` dışında yeni bir dosya eklendiğinde yap.
+
+## Yeni sürüm çıkarmak
+`web/index.html` içindeki `APP_VERSION` ve `web/version.json` içindeki `version` aynı anda artırılır ve `main`'e gönderilir.
+Pages iş akışı yayınlar; APK iş akışı yeni kurulumlar için `v1.x.y` Release'ini de oluşturur.
 
 Made by Us
