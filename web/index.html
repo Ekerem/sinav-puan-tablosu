@@ -281,7 +281,7 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
     <div class="pbody">
       <div class="row">
         <button class="btn small" id="updBtn">🔄 Güncelle</button>
-        <button class="btn small" id="csvBtn">⬇ CSV indir</button>
+        <button class="btn small" id="csvBtn">⬇ Excel dosyası indir</button>
       </div>
       <div class="row opts">
         <label><input type="checkbox" id="optAuto" checked> Puandan sonra sıradakine geç</label>
@@ -348,7 +348,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.6.0';
+const APP_VERSION = '1.6.1';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -931,11 +931,103 @@ $('copyBtn').onclick = () => {
   const fallback = () => { const a = $('copyArea'); a.hidden = false; a.value = txt; a.focus(); a.select(); try { document.execCommand('copy') ? done() : toast('Kutudaki metni seçip kopyala'); } catch (e) { toast('Kutudaki metni seçip kopyala'); } };
   try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
 };
+/* ================= Excel (.xlsx) indirme =================
+   Kütüphanesiz, kenarlıklı tablo: başlık satırı kalın ve gölgeli, her hücrede ince kenarlık, sütunlar sığacak genişlikte,
+   toplam ve ortalamalar Excel formülüyle (puan değişirse Excel'de de güncellenir). */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+function crc32(u8) { let c = 0xFFFFFFFF; for (let i = 0; i < u8.length; i++) c = CRC_T[(c ^ u8[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; }
+function zipStore(files) {
+  const enc = new TextEncoder(), parts = [], central = []; let off = 0;
+  const u16 = v => [v & 255, (v >>> 8) & 255], u32 = v => [v & 255, (v >>> 8) & 255, (v >>> 16) & 255, (v >>> 24) & 255];
+  files.forEach(([name, text]) => {
+    const nm = enc.encode(name), data = enc.encode(text), crc = crc32(data);
+    const head = [...u32(0x04034b50), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nm.length), ...u16(0)];
+    parts.push(new Uint8Array(head), nm, data);
+    central.push(new Uint8Array([...u32(0x02014b50), ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(data.length), ...u16(nm.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(off)]), nm);
+    off += head.length + nm.length + data.length;
+  });
+  const cSize = central.reduce((a, x) => a + x.length, 0);
+  const end = new Uint8Array([...u32(0x06054b50), ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cSize), ...u32(off), ...u16(0)]);
+  return new Blob([...parts, ...central, end], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+const xesc = v => String(v).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
+function colLetter(i) { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
+function buildXlsx() {
+  const e = ex(), k = cls(), st = e.students, hasNo = st.some(s => s.no), nq = e.points.length;
+  const lead = hasNo ? 3 : 2;                       // Sıra, (Okul No), Öğrenci
+  const qc = i => lead + i, tc = lead + nq;         // sütun sırası
+  const HEAD = 3, first = HEAD + 1, last = HEAD + st.length, AVG = last + 1;
+  // stiller: 1 başlık · 2 metin · 3 sayı · 4 toplam · 5 başlık yazısı · 6 alt bilgi · 7 ortalama sayısı · 8 puan sınırı aşan
+  const cells = [];
+  const put = (r, c, xml) => { (cells[r] = cells[r] || [])[c] = xml; };
+  const ref = (c, r) => colLetter(c) + r;
+  const str = (r, c, v, sty) => put(r, c, `<c r="${ref(c, r)}" s="${sty}" t="inlineStr"><is><t xml:space="preserve">${xesc(v)}</t></is></c>`);
+  const num = (r, c, v, sty) => put(r, c, v == null || v === '' ? `<c r="${ref(c, r)}" s="${sty}"/>` : `<c r="${ref(c, r)}" s="${sty}"><v>${v}</v></c>`);
+  const fml = (r, c, f, v, sty) => put(r, c, `<c r="${ref(c, r)}" s="${sty}"><f>${xesc(f)}</f>${v == null || v === '' ? '' : `<v>${v}</v>`}</c>`);
+  str(1, 0, `${k.name ? k.name + ' · ' : ''}${e.name || 'Sınav'}`, 5);
+  str(2, 0, `${st.length} öğrenci · Toplam ${fmt(maxTotal(e))} puan · ${new Date().toLocaleDateString('tr-TR')}`, 6);
+  str(HEAD, 0, 'Sıra', 1); if (hasNo) str(HEAD, 1, 'Okul No', 1); str(HEAD, lead - 1, 'Öğrenci', 1);
+  e.points.forEach((p, i) => str(HEAD, qc(i), `${colName(e, i)}\n(${fmt(p)} p)`, 1));
+  str(HEAD, tc, `Toplam\n(${fmt(maxTotal(e))})`, 1);
+  st.forEach((s, j) => {
+    const r = first + j; num(r, 0, j + 1, 3); if (hasNo) { if (/^\d{1,9}$/.test(s.no || '')) num(r, 1, +s.no, 3); else str(r, 1, s.no || '', 2); } str(r, lead - 1, s.name, 2);
+    s.scores.forEach((v, i) => num(r, qc(i), v, v != null && v > e.points[i] ? 8 : 3));
+    const { t, n } = total(s);
+    fml(r, tc, `IF(COUNT(${ref(qc(0), r)}:${ref(qc(nq - 1), r)})=0,"",SUM(${ref(qc(0), r)}:${ref(qc(nq - 1), r)}))`, n ? Math.round(t * 100) / 100 : '', 4);
+  });
+  if (st.length) {
+    str(AVG, 0, '', 1); if (hasNo) str(AVG, 1, '', 1); str(AVG, lead - 1, 'Sınıf ortalaması', 1);
+    for (let c = lead; c <= tc; c++) {
+      const vals = c === tc ? st.map(s => total(s)).filter(x => x.n).map(x => x.t) : st.map(s => s.scores[c - lead]).filter(v => v != null);
+      const v = vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : '';
+      fml(AVG, c, `IFERROR(ROUND(AVERAGE(${ref(c, first)}:${ref(c, last)}),1),"")`, v, 7);
+    }
+  }
+  // sütun genişlikleri
+  const wName = Math.min(40, Math.max(16, ...st.map(s => s.name.length + 2)));
+  const widths = [6, ...(hasNo ? [10] : []), wName, ...e.points.map((_, i) => Math.min(18, Math.max(8, colName(e, i).length + 2))), 10];
+  const cols = widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
+  const rowsXml = cells.map((row, r) => row ? `<row r="${r}"${r === HEAD ? ' ht="34" customHeight="1"' : r === 1 ? ' ht="22" customHeight="1"' : ''}>${row.filter(Boolean).join('')}</row>` : '').join('');
+  const lastRef = ref(tc, st.length ? AVG : HEAD);
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<dimension ref="A1:${lastRef}"/><sheetViews><sheetView workbookViewId="0"><pane xSplit="${lead}" ySplit="${HEAD}" topLeftCell="${ref(lead, first)}" activePane="bottomRight" state="frozen"/></sheetView></sheetViews>
+<sheetFormatPr defaultRowHeight="18"/><cols>${cols}</cols><sheetData>${rowsXml}</sheetData>
+<mergeCells count="2"><mergeCell ref="A1:${ref(tc, 1)}"/><mergeCell ref="A2:${ref(tc, 2)}"/></mergeCells>
+<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup paperSize="9" orientation="${tc > 9 ? 'landscape' : 'portrait'}" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+  const B = '<border><left style="thin"><color rgb="FF8C96A5"/></left><right style="thin"><color rgb="FF8C96A5"/></right><top style="thin"><color rgb="FF8C96A5"/></top><bottom style="thin"><color rgb="FF8C96A5"/></bottom><diagonal/></border>';
+  const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<numFmts count="1"><numFmt numFmtId="164" formatCode="0.##"/></numFmts>
+<fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FF5B6677"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFCF3428"/><name val="Calibri"/></font></fonts>
+<fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDCE5F7"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF1F4F9"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFDE6E3"/><bgColor indexed="64"/></patternFill></fill></fills>
+<borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${B}</borders>
+<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs>
+<cellXfs count="9">
+<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
+<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="164" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
+<xf numFmtId="164" fontId="1" fillId="2" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="164" fontId="4" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+</cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  const sheetName = xesc((k.name || 'Puanlar').replace(/[\\\/?*\[\]:]/g, '-').slice(0, 31) || 'Puanlar');
+  return zipStore([
+    ['[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>'],
+    ['_rels/.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],
+    ['xl/workbook.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="${sheetName}" sheetId="1" r:id="rId1"/></sheets><definedNames><definedName name="_xlnm.Print_Titles" localSheetId="0">'${sheetName.replace(/'/g, "''")}'!$${HEAD}:$${HEAD}</definedName></definedNames><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`],
+    ['xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>'],
+    ['xl/styles.xml', styles],
+    ['xl/worksheets/sheet1.xml', sheet],
+  ]);
+}
 $('csvBtn').onclick = () => {
-  const csv = '﻿' + rows().map(r => r.map(x => { x = String(x); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
-  const name = ((cls().name ? cls().name + ' ' : '') + (ex().name || 'sinav')).replace(/[\\/:*?"<>|]/g, '').trim() + '.csv';
+  const name = ((cls().name ? cls().name.replace(/\//g, '-') + ' ' : '') + (ex().name || 'sinav')).replace(/[\\/:*?"<>|]/g, '').trim() + '.xlsx';
   try {
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(buildXlsx()); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); toast(name + ' indiriliyor');
   } catch (e) { toast('İndirme açılamadı, “Excel\'e kopyala”yı kullan'); }
 };
@@ -949,7 +1041,7 @@ const CMD = { next: ['geç', 'atla', 'sonraki', 'ileri', 'boş', 'pas'], prev: [
 /* Bir cümleyi işlem listesine çevirir: [{v:sayı}|{cmd}|{jump:satır}] */
 const SKILL_WORDS = [['okuma', 'reading', 'ridink', 'riding'], ['konuşma', 'speaking', 'spiking', 'spiğking'], ['dinleme', 'listening', 'lisıning'], ['yazma', 'writing', 'rayting', 'vriting']];
 function parseSpeech(text, students, labels) {
-  const out = []; let t = norm(text).replace(/(\d),(\d)/g, '$1.$2');
+  const out = []; let t = norm(String(text).replace(/(\d)\s?[,.]\s?(\d)/g, '$1_$2')).replace(/(\d)_(\d)/g, '$1.$2');
   // sütun adları (Okuma, Konuşma… ya da öğretmenin verdiği ad) → ¤sütun¤
   const colKeys = [];
   (labels || []).forEach((l, c) => {
