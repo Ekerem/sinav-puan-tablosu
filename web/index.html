@@ -148,6 +148,19 @@ tfoot .pct{display:block;font-size:11px;font-weight:500}
 .pvlist .pno{font:500 12px var(--mono);color:var(--muted)}
 .pvlist .tag{font-size:11px;font-weight:700;padding:2px 7px;border-radius:999px;background:var(--red-soft);color:var(--red)}
 .pvlist label.off .pn{color:var(--muted);font-weight:400;text-decoration:line-through}
+/* Sınıf sekmeleri */
+.classbar{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 6px;scrollbar-width:thin}
+.ctab{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 14px;font-weight:700;font-size:14px;
+  display:inline-flex;gap:8px;align-items:center;min-height:38px;white-space:nowrap}
+.ctab small{font:500 12px var(--mono);color:var(--muted)}
+.ctab[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.ctab[aria-selected="true"] small{color:var(--surface);opacity:.7}
+.ctab.add{border-style:dashed;color:var(--accent);background:transparent}
+.examrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.examrow select{flex:1 1 180px;min-width:0;max-width:340px}
+.examrow .lbl{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.clsname{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.clsname input{font:700 18px var(--display);padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--paper);width:160px}
 td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 #sign{position:fixed;right:12px;bottom:8px;font:700 12px var(--body);color:var(--ink);opacity:.45;pointer-events:none;z-index:50;
   margin-bottom:env(safe-area-inset-bottom,0px);margin-right:env(safe-area-inset-right,0px)}
@@ -160,15 +173,17 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 <div class="wrap">
   <header class="top">
     <div class="brand" style="flex:1;min-width:220px">
-      <small>Sınav Puan Tablosu</small>
+      <small id="brandSmall">Sınav Puan Tablosu</small>
       <input id="examName" aria-label="Sınavın adı" value="">
     </div>
-    <div class="row">
-      <select id="examSel" class="btn small" aria-label="Kayıtlı sınavlar"></select>
-      <button class="btn small" id="newExam">＋ Yeni sınav</button>
-      <button class="btn small" id="updBtn">🔄 Güncelle</button>
-    </div>
   </header>
+  <nav class="classbar" id="classBar" role="tablist" aria-label="Sınıflar"></nav>
+  <div class="examrow">
+    <span class="lbl">Sınav</span>
+    <select id="examSel" class="btn small" aria-label="Bu sınıfın sınavları"></select>
+    <button class="btn small" id="newExam">＋ Yeni sınav</button>
+    <button class="btn small" id="updBtn" style="margin-left:auto">🔄 Güncelle</button>
+  </div>
   <div class="msg" id="updmsg" hidden></div>
 
   <section class="voice" aria-live="polite">
@@ -204,8 +219,12 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
   </details>
 
   <details class="panel" id="stuPanel">
-    <summary><span>Öğrenci listesi</span><span class="msg" id="stuCount"></span></summary>
+    <summary><span id="stuTitle">Öğrenci listesi</span><span class="msg" id="stuCount"></span></summary>
     <div class="pbody">
+      <div class="clsname">
+        <label class="field"><span>Sınıfın adı</span><input id="clsName" placeholder="7/B" autocomplete="off"></label>
+        <button class="btn small danger" id="delClass">Bu sınıfı sil</button>
+      </div>
       <div class="paste" id="pasteZone">
         <div class="xlsrow">
           <button class="btn primary" id="xlsBtn">📊 Excel'den öğrenci ekle</button>
@@ -260,7 +279,7 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 <div id="sign">Made by Us</div>
 
 <script>
-const APP_VERSION = '1.2.0';
+const APP_VERSION = '1.3.0';
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !location.hostname.endsWith('claude.ai') && !location.hostname.endsWith('claudeusercontent.com')) {
@@ -270,23 +289,67 @@ const $ = id => document.getElementById(id);
 const KEY = 'sinav-puan-tablosu-v1';
 const uid = () => Math.random().toString(36).slice(2, 9);
 
-/* ================= Veri ================= */
-function sampleExam() {
+/* ================= Veri =================
+   D = { classes:[{id,name,sample?,students:[{id,name,no}]}], exams:[{id,classId,name,points,scores:{öğrenciId:[...]}}], curClass, cur }
+   Her sınavın "students" alanı, sınıf listesinden o sınavın puanlarıyla birlikte üretilen bir görünümdür (kaydedilmez). */
+const DEF_POINTS = [10, 10, 15, 15, 15, 15, 20];
+function sampleData() {
   const names = ['Ayşe Demir', 'Mehmet Kaya', 'Zeynep Arslan', 'Emir Yıldız', 'Elif Şahin', 'Yusuf Çelik'];
-  const pts = [10, 10, 15, 15, 15, 15, 20];
   const sc = [[10, 8, 15, 12, 10, 15, 18], [6, 10, 9, 15, 7.5, 12, 10], [10, 10, 15, 15, 13, 15, 20], [4, 5, 10, 8, 6, 9, 12], [], []];
-  return { id: uid(), name: '1. Dönem 1. Matematik Sınavı', points: pts, sample: true,
-    students: names.map((n, i) => ({ id: uid(), name: n, scores: pts.map((_, j) => sc[i][j] ?? null) })) };
+  const k = { id: uid(), name: '7/B', sample: true, students: names.map(n => ({ id: uid(), name: n, no: '' })) };
+  const e = { id: uid(), classId: k.id, name: '1. Dönem 1. Matematik Sınavı', points: DEF_POINTS.slice(), scores: {} };
+  k.students.forEach((s, i) => e.scores[s.id] = DEF_POINTS.map((_, j) => sc[i][j] ?? null));
+  return { classes: [k], exams: [e], curClass: k.id, cur: e.id };
+}
+function newExamFor(k, points) { return { id: uid(), classId: k.id, name: '1. Sınav', points: (points || DEF_POINTS).slice(), scores: {} }; }
+/* 1.x kayıtlarını (her sınav kendi listesini taşıyordu) sınıflara taşır: aynı listeye sahip sınavlar aynı sınıfa girer */
+function migrate(old) {
+  const N = { classes: [], exams: [] }, bySig = {};
+  (old.exams || []).forEach(oe => {
+    const st = oe.students || [];
+    const sig = oe.sample ? '§sample' : st.map(x => norm(x.name)).join('|');
+    let k = bySig[sig];
+    if (!k) { k = { id: uid(), name: oe.sample ? '7/B' : 'Sınıf ' + (N.classes.filter(c => !c.sample).length + 1), sample: !!oe.sample, students: st.map(x => ({ id: uid(), name: x.name, no: x.no || '' })) }; bySig[sig] = k; N.classes.push(k); }
+    const e = { id: oe.id || uid(), classId: k.id, name: oe.name, points: oe.points || DEF_POINTS.slice(), scores: {} };
+    st.forEach((x, i) => { const ks = k.students[i]; if (ks) e.scores[ks.id] = (x.scores || []).slice(); });
+    N.exams.push(e);
+  });
+  const ce = N.exams.find(e => e.id === old.cur) || N.exams[0];
+  N.cur = ce && ce.id; N.curClass = ce && ce.classId;
+  return N;
 }
 let D;
 function load() {
-  try { D = JSON.parse(localStorage.getItem(KEY)); } catch (e) { D = null; }
-  if (!D || !Array.isArray(D.exams) || !D.exams.length) { const e = sampleExam(); D = { exams: [e], cur: e.id }; }
-  if (!D.exams.find(e => e.id === D.cur)) D.cur = D.exams[0].id;
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(KEY)); } catch (e) { raw = null; }
+  if (raw && Array.isArray(raw.exams) && !raw.classes) raw = migrate(raw);
+  D = raw && Array.isArray(raw.classes) && raw.classes.length ? raw : sampleData();
+  fixCur();
+}
+function fixCur() {
+  if (!D.classes.length) { const k = { id: uid(), name: '7/A', students: [] }; D.classes.push(k); }
+  if (!D.classes.find(k => k.id === D.curClass)) D.curClass = D.classes[0].id;
+  const k = cls();
+  if (!D.exams.some(e => e.classId === k.id)) { const pts = (D.exams.find(e => e.id === D.cur) || {}).points; D.exams.push(newExamFor(k, pts)); }
+  const e = D.exams.find(x => x.id === D.cur);
+  if (!e || e.classId !== k.id) D.cur = (D.exams.find(x => x.id === k.lastExam && x.classId === k.id) || D.exams.filter(x => x.classId === k.id).pop()).id;
+  k.lastExam = D.cur;
 }
 let saveT;
 function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) {} }, 150); }
-const ex = () => D.exams.find(e => e.id === D.cur);
+const cls = () => D.classes.find(k => k.id === D.curClass);
+const classExams = k => D.exams.filter(e => e.classId === k.id);
+function rowsOf(e) {
+  const k = D.classes.find(x => x.id === e.classId);
+  return (k ? k.students : []).map(st => {
+    let a = e.scores[st.id];
+    if (!a) a = e.scores[st.id] = e.points.map(() => null);
+    while (a.length < e.points.length) a.push(null);
+    if (a.length > e.points.length) a.length = e.points.length;
+    return { id: st.id, name: st.name, no: st.no, scores: a };
+  });
+}
+const ex = () => { const e = D.exams.find(x => x.id === D.cur); if (e && !Object.getOwnPropertyDescriptor(e, 'students')) Object.defineProperty(e, 'students', { get() { return rowsOf(this); }, enumerable: false, configurable: true }); return e; };
 const maxTotal = e => e.points.reduce((a, b) => a + (+b || 0), 0);
 const fmt = v => v == null || v === '' ? '' : (Math.round(v * 100) / 100).toString().replace('.', ',');
 function total(s) { let t = 0, n = 0; s.scores.forEach(v => { if (v != null) { t += v; n++; } }); return { t, n }; }
@@ -299,9 +362,15 @@ function clampCur() { const e = ex(); cur.r = Math.max(0, Math.min(cur.r, e.stud
 function render() {
   const e = ex();
   $('examName').value = e.name;
-  $('examSel').innerHTML = D.exams.map(x => `<option value="${x.id}">${esc(x.name || 'Adsız sınav')}</option>`).join('');
+  const k = cls();
+  $('classBar').innerHTML = D.classes.map(c => `<button class="ctab" role="tab" data-cls="${c.id}" aria-selected="${c.id === k.id}">${esc(c.name || 'Adsız sınıf')} <small>${c.students.length}</small></button>`).join('')
+    + `<button class="ctab add" id="addClass">＋ Sınıf ekle</button>`;
+  $('brandSmall').textContent = (k.name || 'Adsız sınıf') + ' · Sınav Puan Tablosu';
+  $('examSel').innerHTML = classExams(k).map(x => `<option value="${x.id}">${esc(x.name || 'Adsız sınav')}</option>`).join('');
   $('examSel').value = e.id;
-  $('sampleNote').hidden = !e.sample;
+  $('sampleNote').hidden = !k.sample;
+  if (document.activeElement !== $('clsName')) $('clsName').value = k.name;
+  $('stuTitle').textContent = (k.name || 'Sınıf') + ' öğrenci listesi';
   $('qCount').value = e.points.length;
   $('qpts').innerHTML = e.points.map((p, i) => `<label>${i + 1}. soru<input id="pt${i}" data-i="${i}" type="number" min="0" step="0.5" inputmode="decimal" value="${p}"></label>`).join('');
   const mt = maxTotal(e);
@@ -314,7 +383,7 @@ function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<':
 function renderTable() {
   const e = ex(); clampCur();
   if (!e.students.length) {
-    $('tbl').innerHTML = `<tbody><tr><td class="empty">Henüz öğrenci yok. “Öğrenci listesi” bölümünden Excel dosyasını seç ya da satırları kopyalayıp bu sayfaya yapıştır.</td></tr></tbody>`;
+    $('tbl').innerHTML = `<tbody><tr><td class="empty">Bu sınıfta henüz öğrenci yok. Aşağıdaki öğrenci listesi bölümünden Excel dosyasını seç ya da satırları kopyalayıp bu sayfaya yapıştır.</td></tr></tbody>`;
     $('stuPanel').open = true; updVoiceWhere(); return;
   }
   const ro = listening ? ' readonly' : '';
@@ -371,7 +440,7 @@ function setScore(r, c, v, opts = {}) {
   if (v != null && v > e.points[c]) {
     heard(`${s.name.split(' ')[0]}: ${c + 1}. soru en fazla ${fmt(e.points[c])} puan, ${fmt(v)} yazılmadı`, 'err'); beep(220); return false;
   }
-  s.scores[c] = v; e.sample && (e.sample = false, $('sampleNote').hidden = true);
+  s.scores[c] = v; cls().sample && (cls().sample = false, $('sampleNote').hidden = true);
   const inp = $('c' + r + '_' + c);
   if (inp && opts.updateInput !== false) inp.value = fmt(v);
   updRow(r); updAvg(); save();
@@ -431,7 +500,7 @@ $('tbl').addEventListener('click', ev => {
   const b = ev.target.closest('[data-del]'); if (!b) return;
   const r = +b.dataset.del;
   if (armed === r) {
-    const e = ex(); const nm = e.students[r].name; e.students.splice(r, 1); armed = null; save(); render(); toast(nm + ' silindi');
+    const k = cls(), st = k.students[r]; k.students.splice(r, 1); D.exams.forEach(e => { if (e.classId === k.id) delete e.scores[st.id]; }); armed = null; save(); render(); toast(st.name + ' silindi');
   } else {
     document.querySelectorAll('.del.arm').forEach(x => { x.classList.remove('arm'); x.textContent = '×'; });
     armed = r; b.classList.add('arm'); b.textContent = 'Sil?';
@@ -441,7 +510,28 @@ $('tbl').addEventListener('click', ev => {
 
 /* ================= Ayarlar ================= */
 $('examName').addEventListener('input', () => { ex().name = $('examName').value; const o = $('examSel').selectedOptions[0]; if (o) o.textContent = ex().name || 'Adsız sınav'; save(); });
-$('examSel').onchange = () => { D.cur = $('examSel').value; cur = { r: 0, c: 0 }; save(); render(); };
+$('examSel').onchange = () => { D.cur = $('examSel').value; cls().lastExam = D.cur; cur = { r: 0, c: 0 }; save(); render(); };
+/* ================= Sınıflar ================= */
+function switchClass(id) { if (listening) stopListening(); D.curClass = id; D.cur = null; fixCur(); cur = { r: 0, c: 0 }; $('pv').hidden = true; save(); render(); }
+$('classBar').addEventListener('click', ev => {
+  if (ev.target.closest('#addClass')) { addClass(); return; }
+  const b = ev.target.closest('[data-cls]'); if (b && b.dataset.cls !== D.curClass) switchClass(b.dataset.cls);
+});
+function addClass() {
+  const pts = (ex() || {}).points;
+  const k = { id: uid(), name: 'Yeni sınıf', students: [] }; D.classes.push(k);
+  const e = newExamFor(k, pts); D.exams.push(e);
+  D.curClass = k.id; D.cur = e.id; k.lastExam = e.id; cur = { r: 0, c: 0 }; $('pv').hidden = true;
+  save(); render(); $('stuPanel').open = true;
+  $('clsName').focus(); $('clsName').select();
+  toast('Yeni sınıf açıldı. Adını yaz, sonra listesini yükle');
+}
+$('clsName').addEventListener('input', () => {
+  const k = cls(); k.name = $('clsName').value.trim();
+  const t = document.querySelector(`[data-cls="${k.id}"]`); if (t) t.firstChild.textContent = (k.name || 'Adsız sınıf') + ' ';
+  $('stuTitle').textContent = (k.name || 'Sınıf') + ' öğrenci listesi'; $('brandSmall').textContent = (k.name || 'Adsız sınıf') + ' · Sınav Puan Tablosu'; save();
+});
+$('clsName').addEventListener('change', () => render());
 $('qCount').addEventListener('change', () => {
   const n = Math.max(1, Math.min(30, parseInt($('qCount').value) || 1)), e = ex();
   while (e.points.length < n) e.points.push(10);
@@ -530,9 +620,11 @@ function parseRoster(text, html) {
 let pvItems = [];
 function showPreview(items, src) {
   $('toast').hidden = true;
+  const k0 = cls();
+  if (pvClassName && (/^(yeni sınıf|sınıf \d+)$/i.test(k0.name) || !k0.name)) src = (src ? src + ' · ' : '') + 'Sınıf adı “' + pvClassName + '” olarak ayarlanacak';
   $('pvSrc').hidden = !src; $('pvSrc').textContent = src || '';
-  const e = ex();
-  const have = new Set(e.sample ? [] : e.students.map(s => norm(s.name)));
+  const k = cls();
+  const have = new Set(k.sample ? [] : k.students.map(s => norm(s.name)));
   const seen = new Set();
   items.forEach(it => { const k = norm(it.name); if (have.has(k)) { it.ok = false; it.why = 'zaten listede'; } else if (seen.has(k)) { it.ok = false; it.why = 'iki kez var'; } seen.add(k); });
   pvItems = items;
@@ -552,21 +644,35 @@ function drawPreview() {
 $('pvList').addEventListener('change', ev => { const i = ev.target.dataset.pv; if (i == null) return; pvItems[i].ok = ev.target.checked; ev.target.parentElement.classList.toggle('off', !ev.target.checked); drawPreview(); });
 $('pvCase').onchange = drawPreview;
 function takePreview(replace) {
-  const e = ex(), fix = $('pvCase').checked;
+  const k = cls(), fix = $('pvCase').checked;
   const chosen = pvItems.filter(x => x.ok).map(x => ({ name: fix ? titleTR(x.name) : x.name, no: x.no }));
   if (!chosen.length) return;
-  if (e.sample) { e.students = []; e.sample = false; replace = false; }
+  if (k.sample) { clearClassStudents(k); k.sample = false; replace = false; }
   if (replace) {
-    const old = new Map(e.students.map(s => [norm(s.name), s]));
-    e.students = chosen.map(c => { const o = old.get(norm(c.name)); return o ? Object.assign(o, { name: c.name, no: c.no || o.no || '' }) : { id: uid(), name: c.name, no: c.no, scores: e.points.map(() => null) }; });
-  } else chosen.forEach(c => e.students.push({ id: uid(), name: c.name, no: c.no, scores: e.points.map(() => null) }));
-  $('pv').hidden = true; $('namesIn').value = ''; pvItems = [];
-  save(); render(); toast(replace ? `Liste güncellendi: ${chosen.length} öğrenci` : `${chosen.length} öğrenci eklendi`);
+    const old = new Map(k.students.map(s => [norm(s.name), s])), keep = new Set();
+    k.students = chosen.map(c => { const o = old.get(norm(c.name)); if (o) { keep.add(o.id); return Object.assign(o, { name: c.name, no: c.no || o.no || '' }); } return { id: uid(), name: c.name, no: c.no || '' }; });
+    D.exams.forEach(e => { if (e.classId === k.id) Object.keys(e.scores).forEach(id => { if (!keep.has(id) && !k.students.some(s => s.id === id)) delete e.scores[id]; }); });
+  } else chosen.forEach(c => k.students.push({ id: uid(), name: c.name, no: c.no || '' }));
+  if (pvClassName && (/^(yeni sınıf|sınıf \d+)$/i.test(k.name) || !k.name)) k.name = pvClassName;
+  $('pv').hidden = true; $('namesIn').value = ''; pvItems = []; pvClassName = '';
+  save(); render(); toast((replace ? `${k.name} listesi güncellendi: ` : `${k.name} sınıfına eklendi: `) + chosen.length + ' öğrenci');
 }
+function clearClassStudents(k) { k.students = []; D.exams.forEach(e => { if (e.classId === k.id) e.scores = {}; }); }
 $('pvAdd').onclick = () => takePreview(false);
 $('pvReplace').onclick = () => takePreview(true);
 $('pvCancel').onclick = () => { $('pv').hidden = true; pvItems = []; };
+/* Liste başlığından sınıf adını bulur: "7/B Sınıfı", "7-B", "7. Sınıf / B Şubesi" */
+let pvClassName = '';
+function detectClass(text) {
+  const head = String(text || '').split(/\r?\n/).slice(0, 15).join(' ');
+  let m = head.match(/(\d{1,2})\s*\.?\s*s[ıi]n[ıi]f\w*\s*[\/\-–]?\s*([A-ZÇĞİÖŞÜ])\s*şube/i);
+  if (m) return m[1] + '/' + m[2].toLocaleUpperCase('tr');
+  m = head.match(/(?:^|[^\d])(\d{1,2})\s*[\/\-–]\s*([A-ZÇĞİÖŞÜa-zçğıiöşü])(?![\p{L}])/u);
+  if (m && +m[1] <= 12) return m[1] + '/' + m[2].toLocaleUpperCase('tr');
+  return '';
+}
 function readRoster(text, html) {
+  pvClassName = detectClass(text || (html || '').replace(/<[^>]+>/g, ' '));
   const items = parseRoster(text, html);
   if (!items.length) { toast('Yapıştırılan metinde isim bulunamadı'); return false; }
   showPreview(items); return true;
@@ -614,7 +720,7 @@ function loadXLSX() {
 }
 async function importFile(f) {
   if (!f) return;
-  if (/\.(csv|txt|tsv)$/i.test(f.name)) { const t = await f.text(); $('namesIn').value = t; const it = parseRoster(t); it.length ? showPreview(it, 'Dosya: ' + f.name) : toast('Dosyada öğrenci adı bulunamadı'); return; }
+  if (/\.(csv|txt|tsv)$/i.test(f.name)) { const t = await f.text(); $('namesIn').value = t; pvClassName = detectClass(t); const it = parseRoster(t); it.length ? showPreview(it, 'Dosya: ' + f.name) : toast('Dosyada öğrenci adı bulunamadı'); return; }
   toast('Excel dosyası okunuyor…');
   try { await loadXLSX(); } catch (e) { toast('Excel okuyucu yüklenemedi. İnternet bağlantını kontrol edip tekrar dene'); return; }
   let wb;
@@ -624,9 +730,10 @@ async function importFile(f) {
     const rows = XLSX.utils.sheet_to_json(wb.Sheets[n], { header: 1, raw: false, defval: '', blankrows: false });
     const text = rows.map(r => r.map(c => String(c).replace(/[\t\r\n]+/g, ' ')).join('\t')).join('\n');
     const items = parseRoster(text), good = items.filter(x => x.ok).length;
-    if (!best || good > best.good) best = { n, items, good };
+    if (!best || good > best.good) best = { n, items, good, text };
   });
   if (!best || !best.items.length) { toast('Dosyada öğrenci adı bulunamadı'); return; }
+  pvClassName = detectClass(best.text) || detectClass(f.name.replace(/\.[^.]+$/, '').replace(/_/g, ' '));
   showPreview(best.items, 'Dosya: ' + f.name + (wb.SheetNames.length > 1 ? ' · Sayfa: ' + best.n : ''));
 }
 $('xlsBtn').onclick = () => $('xlsIn').click();
@@ -641,14 +748,12 @@ pz.addEventListener('drop', ev => {
   if (f) { importFile(f); return; }
   const t = ev.dataTransfer.getData('text/plain'), h = ev.dataTransfer.getData('text/html'); if (t || h) { $('namesIn').value = t; readRoster(t, h); }
 });
-$('sortAZ').onclick = () => { ex().students.sort((a, b) => a.name.localeCompare(b.name, 'tr')); save(); render(); };
-$('clearSample').onclick = () => { const e = ex(); e.students = []; e.sample = false; save(); render(); $('stuPanel').open = true; $('pasteZone').scrollIntoView({ block: 'center', behavior: 'smooth' }); };
+$('sortAZ').onclick = () => { cls().students.sort((a, b) => a.name.localeCompare(b.name, 'tr')); save(); render(); };
+$('clearSample').onclick = () => { const k = cls(); clearClassStudents(k); k.sample = false; save(); render(); $('stuPanel').open = true; $('pasteZone').scrollIntoView({ block: 'center', behavior: 'smooth' }); };
 $('newExam').onclick = () => {
-  const e = ex();
-  const n = { id: uid(), name: 'Yeni sınav', points: e.points.slice(),
-    students: e.sample ? [] : e.students.map(s => ({ id: uid(), name: s.name, no: s.no || '', scores: e.points.map(() => null) })) };
-  D.exams.push(n); D.cur = n.id; cur = { r: 0, c: 0 }; save(); render();
-  $('examName').focus(); $('examName').select(); toast('Aynı öğrenci listesiyle yeni sınav açıldı');
+  const k = cls(), e = newExamFor(k, ex().points); e.name = (classExams(k).length + 1) + '. Sınav';
+  D.exams.push(e); D.cur = e.id; k.lastExam = e.id; cur = { r: 0, c: 0 }; save(); render();
+  $('examName').focus(); $('examName').select(); toast(`${k.name} için yeni sınav açıldı`);
 };
 function twoStep(btn, label, fn) {
   let t; const orig = btn.textContent;
@@ -658,11 +763,17 @@ function twoStep(btn, label, fn) {
     t = setTimeout(() => { delete btn.dataset.arm; btn.textContent = orig; }, 3000);
   };
 }
-twoStep($('clearScores'), 'Emin misin? Tekrar bas', () => { ex().students.forEach(s => s.scores = s.scores.map(() => null)); save(); render(); toast('Puanlar sıfırlandı'); });
+twoStep($('clearScores'), 'Emin misin? Tekrar bas', () => { ex().scores = {}; save(); render(); toast('Puanlar sıfırlandı'); });
 twoStep($('delExam'), 'Emin misin? Tekrar bas', () => {
-  D.exams = D.exams.filter(e => e.id !== D.cur);
-  if (!D.exams.length) { const e = sampleExam(); e.sample = false; e.students = []; e.name = 'Yeni sınav'; D.exams.push(e); }
-  D.cur = D.exams[0].id; save(); render(); toast('Sınav silindi');
+  const pts = ex().points;
+  D.exams = D.exams.filter(e => e.id !== D.cur); D.cur = null;
+  const k = cls(); if (!classExams(k).length) D.exams.push(newExamFor(k, pts));
+  fixCur(); save(); render(); toast('Sınav silindi');
+});
+twoStep($('delClass'), 'Sınıf ve sınavları silinsin mi? Tekrar bas', () => {
+  const k = cls(), nm = k.name;
+  D.exams = D.exams.filter(e => e.classId !== k.id); D.classes = D.classes.filter(c => c.id !== k.id);
+  D.cur = null; D.curClass = (D.classes[0] || {}).id; fixCur(); cur = { r: 0, c: 0 }; save(); render(); toast(nm + ' silindi');
 });
 
 /* ================= Dışa aktarma ================= */
@@ -680,7 +791,7 @@ $('copyBtn').onclick = () => {
 };
 $('csvBtn').onclick = () => {
   const csv = '﻿' + rows().map(r => r.map(x => { x = String(x); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
-  const name = (ex().name || 'sinav').replace(/[\\/:*?"<>|]/g, '').trim() + '.csv';
+  const name = ((cls().name ? cls().name + ' ' : '') + (ex().name || 'sinav')).replace(/[\\/:*?"<>|]/g, '').trim() + '.csv';
   try {
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
     document.body.appendChild(a); a.click(); a.remove(); toast(name + ' indiriliyor');
