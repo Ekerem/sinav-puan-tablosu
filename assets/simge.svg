@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- Sınav Puan Tablosu simgesi: puan çizelgesi kâğıdı, kırmızı kalemle toplam ve mikrofon -->
+  <rect width="1024" height="1024" fill="#2f5bd3"/>
+  <g transform="rotate(-4 512 512)">
+    <rect x="232" y="180" width="560" height="664" rx="40" fill="#ffffff"/>
+    <g stroke="#c9d4ee" stroke-width="10">
+      <line x1="232" y1="300" x2="792" y2="300"/><line x1="232" y1="410" x2="792" y2="410"/>
+      <line x1="232" y1="520" x2="792" y2="520"/><line x1="232" y1="630" x2="792" y2="630"/>
+      <line x1="420" y1="180" x2="420" y2="844"/><line x1="560" y1="180" x2="560" y2="844"/>
+    </g>
+    <g fill="#9fb2df"><rect x="270" y="340" width="110" height="28" rx="14"/><rect x="270" y="450" width="90" height="28" rx="14"/><rect x="270" y="560" width="120" height="28" rx="14"/></g>
+    <text x="676" y="760" font-family="DejaVu Sans, Arial" font-weight="700" font-size="170" fill="#cf3428" text-anchor="middle">100</text>
+    <ellipse cx="676" cy="700" rx="140" ry="92" fill="none" stroke="#cf3428" stroke-width="14"/>
+  </g>
+  <circle cx="300" cy="760" r="140" fill="#cf3428" stroke="#ffffff" stroke-width="22"/>
+  <g fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round">
+    <rect x="268" y="668" width="64" height="118" rx="32" fill="#ffffff"/>
+    <path d="M232 752a68 68 0 0 0 136 0M300 820v30"/>
+  </g>
+</svg>

@@ -1,0 +1,640 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Sınav Puan Tablosu</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#2f5bd3">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="simge-192.png">
+<link rel="apple-touch-icon" href="simge-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<style>
+/* Düzen: üstte sınav başlığı, altında yapışkan "ses şeridi", ortada öğrenci × soru tablosu (isim sütunu sabit), en altta sınıf ortalamaları. */
+:root{
+  --paper:#f3f5f9; --surface:#ffffff; --ink:#18212e; --muted:#5b6677; --line:#d8dee8;
+  --accent:#2f5bd3; --accent-soft:#e3eafc; --red:#cf3428; --red-soft:#fde6e3; --good:#1c845a; --good-soft:#dff3ea;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#11151b; --surface:#191f28; --ink:#e5eaf1; --muted:#97a2b3; --line:#2a3340;
+  --accent:#86a6ff; --accent-soft:#1f2b48; --red:#ff7b6f; --red-soft:#3a1d1b; --good:#54cf97; --good-soft:#15342a; color-scheme:dark;}}
+:root[data-theme="dark"]{
+  --paper:#11151b; --surface:#191f28; --ink:#e5eaf1; --muted:#97a2b3; --line:#2a3340;
+  --accent:#86a6ff; --accent-soft:#1f2b48; --red:#ff7b6f; --red-soft:#3a1d1b; --good:#54cf97; --good-soft:#15342a; color-scheme:dark;}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:400 15px/1.45 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
+  padding-block:14px 40px;}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--paper)}
+.wrap{max-width:1100px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+[hidden]{display:none!important}
+
+header.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;justify-content:space-between}
+.brand{display:flex;flex-direction:column;min-width:0}
+.brand small{font:700 11px/1 var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+#examName{font:800 clamp(22px,4.6vw,30px)/1.15 var(--display);border:0;background:transparent;padding:2px 0;
+  border-bottom:2px dashed transparent;width:100%;min-width:0;text-wrap:balance}
+#examName:hover,#examName:focus{border-bottom-color:var(--line);outline:none}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.btn{border:1px solid var(--line);background:var(--surface);border-radius:10px;padding:8px 12px;font-weight:700;font-size:14px;
+  display:inline-flex;align-items:center;gap:6px;min-height:40px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.btn.danger{color:var(--red)}
+.btn.small{min-height:34px;padding:5px 10px;font-size:13px}
+select.btn{padding-right:28px}
+.msg{font-size:13px;color:var(--muted)}
+
+/* Ses şeridi */
+.voice{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border:1px solid var(--line);
+  border-radius:14px;padding:10px;display:flex;gap:12px;align-items:center;box-shadow:0 6px 18px -12px rgba(0,0,0,.35)}
+#micBtn{flex:none;width:58px;height:58px;border-radius:50%;border:0;background:var(--accent);color:var(--surface);
+  display:grid;place-items:center;position:relative}
+#micBtn svg{width:26px;height:26px}
+#micBtn.on{background:var(--red)}
+#micBtn.on::after{content:"";position:absolute;inset:-6px;border-radius:50%;border:3px solid var(--red);opacity:.5;animation:pulse 1.4s infinite}
+@keyframes pulse{0%{transform:scale(.9);opacity:.6}100%{transform:scale(1.25);opacity:0}}
+@media (prefers-reduced-motion:reduce){#micBtn.on::after{animation:none}}
+.vtext{min-width:0;flex:1;display:flex;flex-direction:column;gap:2px}
+#vWhere{font:700 16px/1.25 var(--display);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#vWhere .q{color:var(--accent)}
+#vHeard{font-size:14px;color:var(--muted);min-height:20px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#vHeard.err{color:var(--red);font-weight:700}
+#vHeard.ok{color:var(--good);font-weight:700}
+.vopts{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);flex:none}
+.vopts label{display:flex;gap:6px;align-items:center;cursor:pointer}
+
+/* Ayarlar */
+details.panel{background:var(--surface);border:1px solid var(--line);border-radius:14px}
+details.panel>summary{list-style:none;padding:12px 14px;font-weight:700;display:flex;justify-content:space-between;gap:10px;cursor:pointer;flex-wrap:wrap}
+details.panel>summary::-webkit-details-marker{display:none}
+details.panel>summary::before{content:"▸";margin-right:6px;color:var(--muted)}
+details.panel[open]>summary::before{content:"▾"}
+details.panel>summary span:first-child{flex:1}
+.pbody{padding:0 14px 14px;display:flex;flex-direction:column;gap:12px}
+.qpts{display:flex;flex-wrap:wrap;gap:8px}
+.qpts label{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:12px;color:var(--muted);font-weight:700}
+.qpts input{width:58px;text-align:center;padding:7px 4px;border:1px solid var(--line);border-radius:8px;background:var(--paper);
+  font:600 16px var(--mono)}
+.sumpill{font:600 13px var(--mono);padding:3px 9px;border-radius:999px;background:var(--good-soft);color:var(--good)}
+.sumpill.warn{background:var(--red-soft);color:var(--red)}
+textarea{width:100%;min-height:96px;border:1px solid var(--line);border-radius:10px;padding:10px;background:var(--paper);resize:vertical}
+.field{display:flex;flex-direction:column;gap:6px}
+.field>span{font-size:13px;color:var(--muted);font-weight:700}
+.numin{width:70px;padding:7px;border:1px solid var(--line);border-radius:8px;background:var(--paper);font:600 16px var(--mono);text-align:center}
+
+.note{background:var(--accent-soft);border-radius:12px;padding:10px 12px;font-size:14px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;justify-content:space-between}
+
+/* Tablo */
+.tblwrap{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:separate;border-spacing:0;width:100%;font-variant-numeric:tabular-nums}
+th,td{border-bottom:1px solid var(--line);padding:0;text-align:center;white-space:nowrap}
+thead th{font-size:12px;color:var(--muted);font-weight:700;padding:8px 4px;background:var(--surface)}
+thead th b{display:block;font:700 15px var(--display);color:var(--ink)}
+th.name,td.name{position:sticky;left:0;background:var(--surface);text-align:left;z-index:1;border-right:1px solid var(--line)}
+thead th.name{padding-left:12px}
+td.name{padding:0 4px 0 8px;min-width:130px;max-width:190px}
+td.name .nm{display:flex;align-items:center;gap:6px}
+td.name .no{font:500 12px var(--mono);color:var(--muted);width:20px;text-align:right;flex:none}
+td.name .tx{overflow:hidden;text-overflow:ellipsis;font-weight:700;flex:1;min-width:0}
+td.name .del{border:0;background:none;color:var(--muted);font-size:16px;padding:6px;border-radius:6px;opacity:.55}
+td.name .del:hover{opacity:1;color:var(--red)}
+td.name .del.arm{opacity:1;color:var(--surface);background:var(--red);font-size:12px;font-weight:700}
+td.cell input{width:54px;height:42px;border:0;background:transparent;text-align:center;font:600 16px var(--mono);border-radius:0}
+td.cell input:focus{outline:none}
+td.cell.cur{background:var(--accent-soft);box-shadow:inset 0 0 0 2px var(--accent)}
+td.cell.bad{background:var(--red-soft)}
+td.cell.bad input{color:var(--red)}
+td.cell.flash{animation:flash .7s}
+@keyframes flash{0%{background:var(--good-soft)}100%{background:transparent}}
+tr.currow td.name{background:var(--accent-soft)}
+td.total,th.total{position:sticky;right:0;background:var(--surface);border-left:1px solid var(--line);min-width:64px;padding:0 8px}
+td.total{font:600 17px var(--mono)}
+td.total.part{color:var(--muted)}
+tfoot td{font:600 13px var(--mono);color:var(--muted);padding:8px 4px;border-bottom:0}
+tfoot td.name{font:700 13px var(--body);color:var(--ink);padding-left:12px}
+tfoot .pct{display:block;font-size:11px;font-weight:500}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.help{font-size:13px;color:var(--muted);line-height:1.6}
+.help code{font:500 12.5px var(--mono);background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:1px 6px;color:var(--ink)}
+#sign{position:fixed;right:12px;bottom:8px;font:700 12px var(--body);color:var(--ink);opacity:.45;pointer-events:none;z-index:50;
+  margin-bottom:env(safe-area-inset-bottom,0px);margin-right:env(safe-area-inset-right,0px)}
+#toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
+  padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
+@media (max-width:520px){.vopts{display:none}#micBtn{width:52px;height:52px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand" style="flex:1;min-width:220px">
+      <small>Sınav Puan Tablosu</small>
+      <input id="examName" aria-label="Sınavın adı" value="">
+    </div>
+    <div class="row">
+      <select id="examSel" class="btn small" aria-label="Kayıtlı sınavlar"></select>
+      <button class="btn small" id="newExam">＋ Yeni sınav</button>
+      <button class="btn small" id="updBtn">🔄 Güncelle</button>
+    </div>
+  </header>
+  <div class="msg" id="updmsg" hidden></div>
+
+  <section class="voice" aria-live="polite">
+    <button id="micBtn" aria-label="Sesle puan girmeyi başlat">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><rect x="9" y="2.5" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/></svg>
+    </button>
+    <div class="vtext">
+      <div id="vWhere">Bir hücreye dokun, sonra mikrofona bas</div>
+      <div id="vHeard">Söyle: “15”, “sekiz buçuk”, “tam”, “geç”, “geri”, “sil” ya da öğrencinin adı</div>
+    </div>
+    <div class="vopts">
+      <label><input type="checkbox" id="optSpeak"> Sesli tekrar</label>
+      <label><input type="checkbox" id="optAuto" checked> Sonrakine geç</label>
+    </div>
+  </section>
+
+  <div class="note" id="sampleNote" hidden>
+    <span>Tabloda <b>örnek öğrenciler</b> var. Kendi listeni eklemeden önce temizleyebilirsin.</span>
+    <button class="btn small" id="clearSample">Örnekleri temizle</button>
+  </div>
+
+  <details class="panel" id="setPanel">
+    <summary><span>Sorular ve puanları</span><span class="sumpill" id="sumPill">Toplam 100</span></summary>
+    <div class="pbody">
+      <div class="row">
+        <label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Soru sayısı</span>
+          <input class="numin" id="qCount" type="number" min="1" max="30" inputmode="numeric"></label>
+        <button class="btn small" id="evenPts">Puanları eşit dağıt (100)</button>
+      </div>
+      <div class="qpts" id="qpts"></div>
+    </div>
+  </details>
+
+  <details class="panel" id="stuPanel">
+    <summary><span>Öğrenci listesi</span><span class="msg" id="stuCount"></span></summary>
+    <div class="pbody">
+      <label class="field"><span>Her satıra bir isim yaz ya da e-Okul / Excel listesinden yapıştır</span>
+        <textarea id="namesIn" placeholder="Ayşe Demir&#10;Mehmet Kaya&#10;Zeynep Arslan"></textarea></label>
+      <div class="row">
+        <button class="btn primary" id="addNames">Listeye ekle</button>
+        <button class="btn small" id="sortAZ">A→Z sırala</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="tblwrap"><table id="tbl"></table></div>
+
+  <div class="row">
+    <button class="btn" id="copyBtn">📋 Excel'e kopyala</button>
+    <button class="btn" id="csvBtn">⬇ CSV indir</button>
+    <span style="flex:1"></span>
+    <button class="btn small danger" id="clearScores">Puanları sıfırla</button>
+    <button class="btn small danger" id="delExam">Bu sınavı sil</button>
+  </div>
+  <textarea id="copyArea" readonly hidden style="min-height:120px;font:500 12px var(--mono)"></textarea>
+
+  <details class="panel">
+    <summary><span>Sesle giriş nasıl çalışır?</span></summary>
+    <div class="pbody help">
+      <div>Mikrofona bas, seçili hücreden başlayarak puanları söyle. Her puandan sonra sıradaki soruya, son sorudan sonra sıradaki öğrenciye geçilir.</div>
+      <div>Bir öğrencinin adını söylersen ona atlar: <code>Ayşe 10 8 15</code> Ayşe'nin ilk üç sorusunu doldurur.</div>
+      <div><code>tam</code> sorunun tam puanını yazar · <code>sıfır</code> 0 yazar · <code>buçuk</code> yarım puan ekler · <code>geç</code> boş bırakıp ilerler · <code>geri</code> bir önceki hücreye döner · <code>sil</code> hücreyi boşaltır · <code>dur</code> dinlemeyi kapatır.</div>
+      <div>Sorunun puanından büyük bir sayı söylenirse yazılmaz, uyarı verilir. Ses tanıma Chrome tarayıcıda ve Android uygulamasında çalışır; internet gerektirebilir.</div>
+    </div>
+  </details>
+</div>
+<div id="toast" hidden></div>
+<div id="sign">Made by Us</div>
+
+<script>
+const APP_VERSION = '1.0.0';
+const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
+const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && !location.hostname.endsWith('claude.ai') && !location.hostname.endsWith('claudeusercontent.com')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+const $ = id => document.getElementById(id);
+const KEY = 'sinav-puan-tablosu-v1';
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+/* ================= Veri ================= */
+function sampleExam() {
+  const names = ['Ayşe Demir', 'Mehmet Kaya', 'Zeynep Arslan', 'Emir Yıldız', 'Elif Şahin', 'Yusuf Çelik'];
+  const pts = [10, 10, 15, 15, 15, 15, 20];
+  const sc = [[10, 8, 15, 12, 10, 15, 18], [6, 10, 9, 15, 7.5, 12, 10], [10, 10, 15, 15, 13, 15, 20], [4, 5, 10, 8, 6, 9, 12], [], []];
+  return { id: uid(), name: '1. Dönem 1. Matematik Sınavı', points: pts, sample: true,
+    students: names.map((n, i) => ({ id: uid(), name: n, scores: pts.map((_, j) => sc[i][j] ?? null) })) };
+}
+let D;
+function load() {
+  try { D = JSON.parse(localStorage.getItem(KEY)); } catch (e) { D = null; }
+  if (!D || !Array.isArray(D.exams) || !D.exams.length) { const e = sampleExam(); D = { exams: [e], cur: e.id }; }
+  if (!D.exams.find(e => e.id === D.cur)) D.cur = D.exams[0].id;
+}
+let saveT;
+function save() { clearTimeout(saveT); saveT = setTimeout(() => { try { localStorage.setItem(KEY, JSON.stringify(D)); } catch (e) {} }, 150); }
+const ex = () => D.exams.find(e => e.id === D.cur);
+const maxTotal = e => e.points.reduce((a, b) => a + (+b || 0), 0);
+const fmt = v => v == null || v === '' ? '' : (Math.round(v * 100) / 100).toString().replace('.', ',');
+function total(s) { let t = 0, n = 0; s.scores.forEach(v => { if (v != null) { t += v; n++; } }); return { t, n }; }
+
+/* ================= İmleç ================= */
+let cur = { r: 0, c: 0 };
+function clampCur() { const e = ex(); cur.r = Math.max(0, Math.min(cur.r, e.students.length - 1)); cur.c = Math.max(0, Math.min(cur.c, e.points.length - 1)); }
+
+/* ================= Çizim ================= */
+function render() {
+  const e = ex();
+  $('examName').value = e.name;
+  $('examSel').innerHTML = D.exams.map(x => `<option value="${x.id}">${esc(x.name || 'Adsız sınav')}</option>`).join('');
+  $('examSel').value = e.id;
+  $('sampleNote').hidden = !e.sample;
+  $('qCount').value = e.points.length;
+  $('qpts').innerHTML = e.points.map((p, i) => `<label>${i + 1}. soru<input id="pt${i}" data-i="${i}" type="number" min="0" step="0.5" inputmode="decimal" value="${p}"></label>`).join('');
+  const mt = maxTotal(e);
+  $('sumPill').textContent = 'Toplam ' + fmt(mt);
+  $('sumPill').classList.toggle('warn', mt !== 100);
+  $('stuCount').textContent = e.students.length + ' öğrenci';
+  renderTable();
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function renderTable() {
+  const e = ex(); clampCur();
+  if (!e.students.length) {
+    $('tbl').innerHTML = `<tbody><tr><td class="empty">Henüz öğrenci yok. “Öğrenci listesi” bölümünden isimleri ekle.</td></tr></tbody>`;
+    $('stuPanel').open = true; updVoiceWhere(); return;
+  }
+  const ro = listening ? ' readonly' : '';
+  let h = `<thead><tr><th class="name">Öğrenci</th>${e.points.map((p, i) => `<th><b>${i + 1}</b>${fmt(p)} p</th>`).join('')}<th class="total"><b>Top.</b>${fmt(maxTotal(e))}</th></tr></thead><tbody>`;
+  e.students.forEach((s, r) => {
+    h += `<tr data-r="${r}"><td class="name"><div class="nm"><span class="no">${r + 1}</span><span class="tx" title="${esc(s.name)}">${esc(s.name)}</span><button class="del" data-del="${r}" aria-label="${esc(s.name)} satırını sil">×</button></div></td>`;
+    e.points.forEach((p, c) => {
+      h += `<td class="cell" data-r="${r}" data-c="${c}"><input id="c${r}_${c}" data-r="${r}" data-c="${c}" inputmode="decimal" autocomplete="off" aria-label="${esc(s.name)} ${c + 1}. soru" value="${fmt(s.scores[c])}"${ro}></td>`;
+    });
+    h += `<td class="total" id="t${r}"></td></tr>`;
+  });
+  h += `</tbody><tfoot><tr><td class="name">Ortalama</td>${e.points.map((_, c) => `<td id="avg${c}"></td>`).join('')}<td class="total" id="avgT"></td></tr></tfoot>`;
+  $('tbl').innerHTML = h;
+  e.students.forEach((_, r) => { updRow(r); });
+  updAvg(); markCur();
+}
+function updRow(r) {
+  const e = ex(), s = e.students[r]; if (!s) return;
+  const { t, n } = total(s), td = $('t' + r);
+  td.textContent = n ? fmt(t) : '–';
+  td.classList.toggle('part', n > 0 && n < e.points.length);
+  td.title = n < e.points.length ? `${e.points.length - n} soru boş` : '';
+  e.points.forEach((p, c) => { const cell = $('c' + r + '_' + c)?.parentElement; if (cell) cell.classList.toggle('bad', s.scores[c] != null && s.scores[c] > p); });
+}
+function updAvg() {
+  const e = ex();
+  e.points.forEach((p, c) => {
+    const vals = e.students.map(s => s.scores[c]).filter(v => v != null);
+    const el = $('avg' + c); if (!el) return;
+    if (!vals.length) { el.innerHTML = '–'; return; }
+    const a = vals.reduce((x, y) => x + y, 0) / vals.length;
+    el.innerHTML = `${fmt(Math.round(a * 10) / 10)}<span class="pct">%${p ? Math.round(a / p * 100) : 0}</span>`;
+  });
+  const done = e.students.filter(s => total(s).n > 0);
+  const el = $('avgT');
+  if (el) el.textContent = done.length ? fmt(Math.round(done.reduce((x, s) => x + total(s).t, 0) / done.length * 10) / 10) : '–';
+}
+function markCur() {
+  document.querySelectorAll('td.cell.cur').forEach(x => x.classList.remove('cur'));
+  document.querySelectorAll('tr.currow').forEach(x => x.classList.remove('currow'));
+  const inp = $('c' + cur.r + '_' + cur.c);
+  if (inp) { inp.parentElement.classList.add('cur'); inp.closest('tr').classList.add('currow'); }
+  updVoiceWhere();
+}
+function scrollToCur() { const inp = $('c' + cur.r + '_' + cur.c); if (inp) inp.parentElement.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' }); }
+function updVoiceWhere() {
+  const e = ex(), s = e.students[cur.r];
+  $('vWhere').innerHTML = s ? `${esc(s.name)} · <span class="q">${cur.c + 1}. soru (${fmt(e.points[cur.c])} p)</span>` : 'Önce öğrenci ekle';
+}
+
+/* ================= Puan yazma ================= */
+function setScore(r, c, v, opts = {}) {
+  const e = ex(), s = e.students[r]; if (!s) return false;
+  if (v != null && v > e.points[c]) {
+    heard(`${s.name.split(' ')[0]}: ${c + 1}. soru en fazla ${fmt(e.points[c])} puan, ${fmt(v)} yazılmadı`, 'err'); beep(220); return false;
+  }
+  s.scores[c] = v; e.sample && (e.sample = false, $('sampleNote').hidden = true);
+  const inp = $('c' + r + '_' + c);
+  if (inp && opts.updateInput !== false) inp.value = fmt(v);
+  updRow(r); updAvg(); save();
+  if (opts.flash && inp) { const td = inp.parentElement; td.classList.remove('flash'); void td.offsetWidth; td.classList.add('flash'); }
+  return true;
+}
+function parseTyped(str) {
+  str = String(str).trim().replace(',', '.');
+  if (str === '') return null;
+  const v = Number(str); return isFinite(v) && v >= 0 ? v : NaN;
+}
+function move(d) {
+  const e = ex(); let i = cur.r * e.points.length + cur.c + d;
+  const n = e.students.length * e.points.length;
+  if (i < 0) i = 0; if (i >= n) { i = n - 1; heard('Tablonun sonuna gelindi ✓', 'ok'); }
+  cur = { r: Math.floor(i / e.points.length), c: i % e.points.length }; markCur(); scrollToCur();
+}
+
+/* ================= Tablo olayları ================= */
+$('tbl').addEventListener('pointerdown', ev => {
+  const td = ev.target.closest('td.cell'); if (!td) return;
+  cur = { r: +td.dataset.r, c: +td.dataset.c }; markCur();
+});
+$('tbl').addEventListener('focusin', ev => {
+  const i = ev.target.closest('input'); if (!i || !i.dataset.r) return;
+  cur = { r: +i.dataset.r, c: +i.dataset.c }; markCur(); if (!listening) i.select();
+});
+$('tbl').addEventListener('input', ev => {
+  const i = ev.target; if (!i.dataset.r) return;
+  const v = parseTyped(i.value);
+  if (Number.isNaN(v)) { i.parentElement.classList.add('bad'); return; }
+  const e = ex(), r = +i.dataset.r, c = +i.dataset.c;
+  if (v != null && v > e.points[c]) { i.parentElement.classList.add('bad'); ex().students[r].scores[c] = v; updRow(r); return; }
+  setScore(r, c, v, { updateInput: false });
+});
+$('tbl').addEventListener('keydown', ev => {
+  const i = ev.target; if (!i.dataset || !i.dataset.r) return;
+  const e = ex(), r = +i.dataset.r, c = +i.dataset.c;
+  let nr = r, nc = c;
+  if (ev.key === 'Enter' || (ev.key === 'Tab' && !ev.shiftKey)) { ev.preventDefault(); cur = { r, c }; move(1); $('c' + cur.r + '_' + cur.c)?.focus(); return; }
+  if (ev.key === 'Tab' && ev.shiftKey) { ev.preventDefault(); cur = { r, c }; move(-1); $('c' + cur.r + '_' + cur.c)?.focus(); return; }
+  if (ev.key === 'ArrowDown') nr++; else if (ev.key === 'ArrowUp') nr--;
+  else if (ev.key === 'ArrowRight' && i.selectionStart === i.value.length) nc++;
+  else if (ev.key === 'ArrowLeft' && i.selectionStart === 0) nc--; else return;
+  if (nr < 0 || nc < 0 || nr >= e.students.length || nc >= e.points.length) return;
+  ev.preventDefault(); $('c' + nr + '_' + nc).focus();
+});
+$('tbl').addEventListener('focusout', ev => {
+  const i = ev.target; if (!i.dataset || !i.dataset.r) return;
+  const s = ex().students[+i.dataset.r]; if (!s) return;
+  const v = s.scores[+i.dataset.c];
+  if (v != null && v > ex().points[+i.dataset.c]) { toast(`${+i.dataset.c + 1}. soru en fazla ${fmt(ex().points[+i.dataset.c])} puan`); }
+  else i.value = fmt(v);
+});
+let armed = null, armT;
+$('tbl').addEventListener('click', ev => {
+  const b = ev.target.closest('[data-del]'); if (!b) return;
+  const r = +b.dataset.del;
+  if (armed === r) {
+    const e = ex(); const nm = e.students[r].name; e.students.splice(r, 1); armed = null; save(); render(); toast(nm + ' silindi');
+  } else {
+    document.querySelectorAll('.del.arm').forEach(x => { x.classList.remove('arm'); x.textContent = '×'; });
+    armed = r; b.classList.add('arm'); b.textContent = 'Sil?';
+    clearTimeout(armT); armT = setTimeout(() => { armed = null; b.classList.remove('arm'); b.textContent = '×'; }, 3000);
+  }
+});
+
+/* ================= Ayarlar ================= */
+$('examName').addEventListener('input', () => { ex().name = $('examName').value; const o = $('examSel').selectedOptions[0]; if (o) o.textContent = ex().name || 'Adsız sınav'; save(); });
+$('examSel').onchange = () => { D.cur = $('examSel').value; cur = { r: 0, c: 0 }; save(); render(); };
+$('qCount').addEventListener('change', () => {
+  const n = Math.max(1, Math.min(30, parseInt($('qCount').value) || 1)), e = ex();
+  while (e.points.length < n) e.points.push(10);
+  e.points.length = n;
+  e.students.forEach(s => { while (s.scores.length < n) s.scores.push(null); s.scores.length = n; });
+  save(); render();
+});
+$('qpts').addEventListener('change', ev => {
+  const i = +ev.target.dataset.i, v = parseTyped(ev.target.value), e = ex();
+  e.points[i] = Number.isNaN(v) || v == null ? 0 : v; save(); render();
+});
+$('evenPts').onclick = () => {
+  const e = ex(), n = e.points.length, base = Math.floor(100 / n), extra = 100 - base * n;
+  e.points = e.points.map((_, i) => base + (i >= n - extra ? 1 : 0)); save(); render(); toast('Puanlar eşit dağıtıldı');
+};
+$('addNames').onclick = () => {
+  const e = ex();
+  const names = $('namesIn').value.split(/\r?\n/).map(l => l.split('\t').filter(x => x.trim() && !/^\d+$/.test(x.trim())).join(' ').replace(/^\s*\d+[.)-]?\s+/, '').replace(/\s+/g, ' ').trim()).filter(Boolean);
+  if (!names.length) { toast('Önce isim yaz'); return; }
+  if (e.sample) { e.students = []; e.sample = false; }
+  names.forEach(n => e.students.push({ id: uid(), name: n, scores: e.points.map(() => null) }));
+  $('namesIn').value = ''; save(); render(); toast(names.length + ' öğrenci eklendi');
+};
+$('sortAZ').onclick = () => { ex().students.sort((a, b) => a.name.localeCompare(b.name, 'tr')); save(); render(); };
+$('clearSample').onclick = () => { const e = ex(); e.students = []; e.sample = false; save(); render(); $('stuPanel').open = true; $('namesIn').focus(); };
+$('newExam').onclick = () => {
+  const e = ex();
+  const n = { id: uid(), name: 'Yeni sınav', points: e.points.slice(),
+    students: e.sample ? [] : e.students.map(s => ({ id: uid(), name: s.name, scores: e.points.map(() => null) })) };
+  D.exams.push(n); D.cur = n.id; cur = { r: 0, c: 0 }; save(); render();
+  $('examName').focus(); $('examName').select(); toast('Aynı öğrenci listesiyle yeni sınav açıldı');
+};
+function twoStep(btn, label, fn) {
+  let t; const orig = btn.textContent;
+  btn.onclick = () => {
+    if (btn.dataset.arm) { delete btn.dataset.arm; btn.textContent = orig; clearTimeout(t); fn(); return; }
+    btn.dataset.arm = 1; btn.textContent = label;
+    t = setTimeout(() => { delete btn.dataset.arm; btn.textContent = orig; }, 3000);
+  };
+}
+twoStep($('clearScores'), 'Emin misin? Tekrar bas', () => { ex().students.forEach(s => s.scores = s.scores.map(() => null)); save(); render(); toast('Puanlar sıfırlandı'); });
+twoStep($('delExam'), 'Emin misin? Tekrar bas', () => {
+  D.exams = D.exams.filter(e => e.id !== D.cur);
+  if (!D.exams.length) { const e = sampleExam(); e.sample = false; e.students = []; e.name = 'Yeni sınav'; D.exams.push(e); }
+  D.cur = D.exams[0].id; save(); render(); toast('Sınav silindi');
+});
+
+/* ================= Dışa aktarma ================= */
+function rows() {
+  const e = ex();
+  const head = ['Sıra', 'Öğrenci', ...e.points.map((p, i) => `${i + 1}. soru (${fmt(p)})`), `Toplam (${fmt(maxTotal(e))})`];
+  return [head, ...e.students.map((s, r) => { const { t, n } = total(s); return [r + 1, s.name, ...s.scores.map(fmt), n ? fmt(t) : '']; })];
+}
+$('copyBtn').onclick = () => {
+  const txt = rows().map(r => r.join('\t')).join('\n');
+  const done = () => toast('Kopyalandı. Excel veya e-Okul tablosuna yapıştırabilirsin');
+  const fallback = () => { const a = $('copyArea'); a.hidden = false; a.value = txt; a.focus(); a.select(); try { document.execCommand('copy') ? done() : toast('Kutudaki metni seçip kopyala'); } catch (e) { toast('Kutudaki metni seçip kopyala'); } };
+  try { navigator.clipboard.writeText(txt).then(done, fallback); } catch (e) { fallback(); }
+};
+$('csvBtn').onclick = () => {
+  const csv = '﻿' + rows().map(r => r.map(x => { x = String(x); return /[;"\n]/.test(x) ? '"' + x.replace(/"/g, '""') + '"' : x; }).join(';')).join('\r\n');
+  const name = (ex().name || 'sinav').replace(/[\\/:*?"<>|]/g, '').trim() + '.csv';
+  try {
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); toast(name + ' indiriliyor');
+  } catch (e) { toast('İndirme açılamadı, “Excel\'e kopyala”yı kullan'); }
+};
+
+/* ================= Konuşmayı sayıya çevirme ================= */
+const W = { 'sıfır': 0, 'bir': 1, 'iki': 2, 'üç': 3, 'dört': 4, 'beş': 5, 'altı': 6, 'yedi': 7, 'sekiz': 8, 'dokuz': 9,
+  'on': 10, 'yirmi': 20, 'otuz': 30, 'kırk': 40, 'elli': 50, 'altmış': 60, 'yetmiş': 70, 'seksen': 80, 'doksan': 90, 'yüz': 100 };
+const lower = s => s.replace(/I/g, 'ı').replace(/İ/g, 'i').toLocaleLowerCase('tr');
+const norm = s => lower(s).replace(/[.,!?;:'’"“”()]/g, ' ').replace(/\s+/g, ' ').trim();
+const CMD = { next: ['geç', 'atla', 'sonraki', 'ileri', 'boş', 'pas'], prev: ['geri', 'önceki'], del: ['sil', 'temizle'], stop: ['dur', 'bitti', 'kapat', 'tamam bitti'], full: ['tam'] };
+/* Bir cümleyi işlem listesine çevirir: [{v:sayı}|{cmd}|{jump:satır}] */
+function parseSpeech(text, students) {
+  const out = []; let t = norm(text).replace(/(\d),(\d)/g, '$1.$2');
+  // isimler: önce tam ad, sonra benzersiz ilk ad
+  const cand = [];
+  students.forEach((s, r) => { const full = norm(s.name); cand.push({ k: full, r }); });
+  const firsts = {}; students.forEach((s, r) => { const f = norm(s.name).split(' ')[0]; (firsts[f] = firsts[f] || []).push(r); });
+  Object.entries(firsts).forEach(([f, rs]) => { if (rs.length === 1) cand.push({ k: f, r: rs[0] }); });
+  cand.sort((a, b) => b.k.length - a.k.length);
+  const toks = []; let rest = ' ' + t + ' ';
+  // isim bulunca işaretle
+  cand.forEach(({ k, r }) => { if (!k || W[k] != null) return; const re = new RegExp('(^|\\s)' + k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?=\\s)', 'g'); rest = rest.replace(re, `$1 §${r}§ `); });
+  rest.split(/\s+/).filter(Boolean).forEach(w => toks.push(w));
+  let num = null, parts = [];
+  const flush = () => { if (num != null) out.push({ v: num }); num = null; parts = []; };
+  for (let i = 0; i < toks.length; i++) {
+    let w = toks[i];
+    const m = w.match(/^§(\d+)§$/); if (m) { flush(); out.push({ jump: +m[1] }); continue; }
+    w = w.replace(/(ncı|nci|ncu|ncü|ıncı|inci|uncu|üncü)$/, '');
+    if (/^\d+(\.\d+)?$/.test(w)) {
+      flush(); num = parseFloat(w); parts = [999];
+      if (toks[i + 1] === 'buçuk') { num += 0.5; i++; }
+      flush(); continue;
+    }
+    if (w === 'buçuk' || w === 'yarım') { if (num != null) { num += 0.5; flush(); } else out.push({ v: 0.5 }); continue; }
+    if (W[w] != null) {
+      const v = W[w], last = parts[parts.length - 1];
+      if (num == null) { num = v; parts = [v]; continue; }
+      if (v === 100 && num < 10 && parts.length === 1) { num *= 100; parts = [100]; continue; }
+      const okAdd = (v < 10 && last >= 10) || (v >= 10 && v < 100 && last === 100) || (v >= 10 && v < 100 && last >= 100);
+      if (okAdd && v > 0) { num += v; parts.push(v); continue; }
+      flush(); num = v; parts = [v]; continue;
+    }
+    if (w === 'soru' || w === 'soruya' || w === 'sorunun' || w === 'sorusu') {
+      if (num != null) { out.push({ col: num }); num = null; parts = []; }
+      else if (out.length && out[out.length - 1].v != null) out.push({ col: out.pop().v });
+      continue;
+    }
+    if (CMD.full.includes(w)) { flush(); out.push({ cmd: 'full' }); if (toks[i + 1] === 'puan') i++; continue; }
+    if (CMD.next.includes(w)) { flush(); out.push({ cmd: 'next' }); continue; }
+    if (CMD.prev.includes(w)) { flush(); out.push({ cmd: 'prev' }); continue; }
+    if (CMD.del.includes(w)) { flush(); out.push({ cmd: 'del' }); continue; }
+    if (CMD.stop.includes(w)) { flush(); out.push({ cmd: 'stop' }); continue; }
+    // tanınmayan kelime (ör. "puan", "soru"): sayıyı bölmeden geç
+  }
+  flush();
+  return out;
+}
+
+function applySpeech(text) {
+  const e = ex(); if (!e.students.length) { heard('Önce öğrenci ekle', 'err'); return; }
+  const ops = parseSpeech(text, e.students);
+  if (!ops.length) { heard(`“${text}” anlaşılmadı`, 'err'); beep(220); return; }
+  const said = [];
+  const auto = $('optAuto').checked;
+  for (const o of ops) {
+    if (o.jump != null) { cur = { r: o.jump, c: 0 }; markCur(); scrollToCur(); said.push(e.students[o.jump].name); continue; }
+    if (o.col != null) { if (o.col >= 1 && o.col <= e.points.length) { cur.c = o.col - 1; markCur(); scrollToCur(); said.push(o.col + '. soru'); } continue; }
+    if (o.cmd === 'stop') { stopListening(); heard('Dinleme kapatıldı', 'ok'); return; }
+    if (o.cmd === 'next') { move(1); continue; }
+    if (o.cmd === 'prev') { move(-1); continue; }
+    if (o.cmd === 'del') { setScore(cur.r, cur.c, null, { flash: true }); said.push('silindi'); continue; }
+    const v = o.cmd === 'full' ? e.points[cur.c] : o.v;
+    const r = cur.r, c = cur.c;
+    if (!setScore(r, c, v, { flash: true })) return;
+    said.push(`${c + 1}. soru ${fmt(v)}`);
+    lastSpoken = { name: e.students[r].name.split(' ')[0], c, v };
+    if (auto) move(1); else markCur();
+  }
+  heard('✓ ' + said.join(' · '), 'ok'); beep(880, .05);
+  if ($('optSpeak').checked && lastSpoken) speak(`${fmt(lastSpoken.v)}`);
+}
+let lastSpoken = null;
+
+/* ================= Ses tanıma ================= */
+let listening = false, rec = null, nativeSR = null, speakingUntil = 0;
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+function isApk() { return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }
+function heard(t, cls) { const h = $('vHeard'); h.textContent = t; h.className = cls || ''; }
+async function startListening() {
+  const e = ex(); if (!e.students.length) { toast('Önce öğrenci listesini ekle'); $('stuPanel').open = true; return; }
+  nativeSR = isApk() && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
+  if (nativeSR) {
+    try {
+      const av = await nativeSR.available(); if (!av.available) throw new Error('yok');
+      const p = await nativeSR.requestPermissions(); if (p.speechRecognition && p.speechRecognition !== 'granted') { heard('Mikrofon izni verilmedi', 'err'); return; }
+    } catch (err) { heard('Bu cihazda ses tanıma bulunamadı', 'err'); return; }
+    setOn(true); nativeLoop(); return;
+  }
+  if (!SR) { heard('Bu tarayıcıda ses tanıma yok. Chrome ile aç ya da Android uygulamasını kullan.', 'err'); return; }
+  rec = new SR(); rec.lang = 'tr-TR'; rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+  rec.onresult = ev => {
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const r = ev.results[i], txt = r[0].transcript;
+      if (Date.now() < speakingUntil) continue;
+      if (r.isFinal) applySpeech(txt); else heard('… ' + txt);
+    }
+  };
+  rec.onerror = ev => {
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') { heard('Mikrofon izni verilmedi. Adres çubuğundaki kilit simgesinden izin ver.', 'err'); setOn(false); }
+    else if (ev.error === 'network') { heard('Ses tanıma için internet gerekiyor', 'err'); setOn(false); }
+  };
+  rec.onend = () => { if (listening) { try { rec.start(); } catch (e) {} } };
+  try { rec.start(); setOn(true); } catch (err) { heard('Mikrofon açılamadı', 'err'); }
+}
+async function nativeLoop() {
+  while (listening && nativeSR) {
+    try {
+      heard('Dinliyorum…');
+      const res = await nativeSR.start({ language: 'tr-TR', maxResults: 1, partialResults: false, popup: false, prompt: '' });
+      const txt = res && res.matches && res.matches[0];
+      if (txt && listening && Date.now() >= speakingUntil) applySpeech(txt);
+    } catch (err) { await new Promise(r => setTimeout(r, 300)); }
+  }
+}
+function stopListening() {
+  listening = false; setOn(false);
+  try { rec && rec.stop(); } catch (e) {}
+  try { nativeSR && nativeSR.stop(); } catch (e) {}
+}
+function setOn(on) {
+  listening = on; $('micBtn').classList.toggle('on', on);
+  $('micBtn').setAttribute('aria-label', on ? 'Dinlemeyi durdur' : 'Sesle puan girmeyi başlat');
+  document.querySelectorAll('td.cell input').forEach(i => i.readOnly = on);
+  if (on) { document.activeElement && document.activeElement.blur && document.activeElement.blur(); heard('Dinliyorum… puanı söyle'); wake(); }
+}
+$('micBtn').onclick = () => listening ? (stopListening(), heard('Dinleme kapatıldı')) : startListening();
+
+function speak(t) {
+  if (!('speechSynthesis' in window)) return;
+  try { const u = new SpeechSynthesisUtterance(t); u.lang = 'tr-TR'; u.rate = 1.15; speakingUntil = Date.now() + 1500; u.onend = () => { speakingUntil = Date.now() + 250; }; speechSynthesis.cancel(); speechSynthesis.speak(u); } catch (e) {}
+}
+let actx;
+function beep(f, d = .12) {
+  try { actx = actx || new (window.AudioContext || window.webkitAudioContext)(); const o = actx.createOscillator(), g = actx.createGain();
+    o.frequency.value = f; g.gain.value = .06; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime + d); } catch (e) {}
+}
+let wl; async function wake() { try { wl = await navigator.wakeLock.request('screen'); } catch (e) {} }
+let toastT; function toast(t) { const el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => el.hidden = true, 2600); }
+
+/* ================= Güncelleme ================= */
+function cmpVer(a, b) { const pa = a.split('.').map(Number), pb = b.split('.').map(Number); for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) - (pb[i] || 0); } return 0; }
+async function checkUpdate() {
+  const el = $('updmsg'); el.hidden = false;
+  const onPages = location.hostname.endsWith('github.io');
+  const url = (onPages ? 'version.json' : PAGES_BASE + 'version.json') + '?t=' + Date.now();
+  el.textContent = 'Kontrol ediliyor…';
+  try {
+    const r = await fetch(url, { cache: 'no-store' }); if (!r.ok) throw new Error(r.status);
+    const v = await r.json();
+    if (cmpVer(v.version, APP_VERSION) > 0) {
+      if (isApk()) { el.textContent = `Yeni sürüm (${v.version}) hazır. İndirme sayfası açılıyor…`; setTimeout(() => { location.href = v.apk; }, 800); }
+      else { el.textContent = `Yeni sürüm (${v.version}) yükleniyor…`; setTimeout(() => location.replace(location.pathname + '?v=' + v.version + '&t=' + Date.now()), 600); }
+    } else el.textContent = 'Uygulama güncel ✓ (sürüm ' + APP_VERSION + ')';
+  } catch (e) { el.textContent = 'Güncelleme kontrol edilemedi. İnternet bağlantını kontrol edip tekrar dene.'; }
+}
+$('updBtn').onclick = checkUpdate;
+
+load(); render();
+try { $('csvBtn').hidden = isApk() || window.self !== window.top; } catch (e) { $('csvBtn').hidden = true; }
+if (ex().students.length) $('setPanel').open = false;
+</script>
+</body>
+</html>

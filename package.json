@@ -1,0 +1,13 @@
+{
+  "name": "sinav-puan-tablosu",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sınav puanlarını soru soru, sesle de girebileceğin puan tablosu",
+  "scripts": { "android": "npx cap add android && npx cap sync android" },
+  "dependencies": {
+    "@capacitor/android": "^6.1.2",
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor-community/speech-recognition": "^6.0.1"
+  }
+}

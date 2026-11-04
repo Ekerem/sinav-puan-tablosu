@@ -1,0 +1,6 @@
+{
+  "appId": "com.madebyus.sinavpuantablosu",
+  "appName": "Sınav Puan Tablosu",
+  "webDir": "web",
+  "android": { "allowMixedContent": false }
+}

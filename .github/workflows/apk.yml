@@ -1,0 +1,42 @@
+name: APK
+on:
+  push:
+    branches: [main]
+    paths: ['web/**', 'capacitor.config.json', 'package.json', '.github/workflows/apk.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Android SDK (sunucuda hazır)
+        run: echo "ANDROID_HOME=$ANDROID_HOME" && ls "$ANDROID_HOME"
+      - run: npm install
+      - run: npx cap add android && npx cap sync android
+      - name: Mikrofon izni ve ses tanıma servisi
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          grep -q RECORD_AUDIO $M || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <queries><intent><action android:name="android.speech.RecognitionService" /></intent></queries>\n</manifest>#' $M
+          cat $M
+      - name: Uygulama simgesi (assets/ klasöründen)
+        run: npx --yes @capacitor/assets@3.0.5 generate --android --iconBackgroundColor '#2f5bd3' --splashBackgroundColor '#2f5bd3'
+      - run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk sinav-puan-tablosu.apk
+      - id: v
+        run: echo "version=$(node -p "require('./web/version.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with: { name: sinav-puan-tablosu-apk, path: sinav-puan-tablosu.apk }
+      - name: Release oluştur ve APK'yı ekle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.v.outputs.version }}"
+          target_commitish: ${{ github.sha }}
+          name: "Sınav Puan Tablosu v${{ steps.v.outputs.version }}"
+          files: sinav-puan-tablosu.apk
+          make_latest: true
