@@ -7,6 +7,7 @@ permissions:
   contents: read
   pages: write
   id-token: write
+  deployments: read
 concurrency: { group: pages, cancel-in-progress: true }
 jobs:
   deploy:
@@ -18,5 +19,13 @@ jobs:
         with: { enablement: true }
       - uses: actions/upload-pages-artifact@v3
         with: { path: web }
+      - name: Takılı kalan eski yayını iptal et
+        continue-on-error: true
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          for sha in $(gh api "repos/${{ github.repository }}/deployments?environment=github-pages&per_page=20" --jq '.[].sha' | sort -u); do
+            [ "$sha" = "${{ github.sha }}" ] && continue
+            gh api -X POST "repos/${{ github.repository }}/pages/deployments/$sha/cancel" && echo "iptal edildi: $sha" || true
+          done
       - id: d
         uses: actions/deploy-pages@v4
