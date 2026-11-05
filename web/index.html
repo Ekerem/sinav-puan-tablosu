@@ -166,6 +166,11 @@ tfoot .pct{display:block;font-size:11px;font-weight:500}
 .ctab small{font:500 12px var(--mono);color:var(--muted)}
 .ctab[aria-selected="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
 .ctab[aria-selected="true"] small{color:var(--surface);opacity:.7}
+.ctab{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.ctab.editing{padding:3px 6px 3px 10px;background:var(--surface);border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.ctab input.cedit{font:700 14px var(--body);color:var(--ink);background:transparent;border:0;outline:none;width:9ch;min-width:4ch;padding:4px 0}
+.ctab .cok{border:0;border-radius:999px;background:var(--accent);color:var(--surface);font:700 13px var(--body);padding:5px 10px;cursor:pointer}
+.classhint{font-size:12px;color:var(--muted);margin-top:-4px}
 .ctab.add{border-style:dashed;color:var(--accent);background:transparent}
 .examrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .examrow select{flex:1 1 180px;min-width:0;max-width:340px}
@@ -196,6 +201,7 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
 <body>
 <div class="wrap">
   <nav class="classbar" id="classBar" role="tablist" aria-label="Sınıflar"></nav>
+  <div class="classhint" id="classHint" hidden>Adını değiştirmek için sınıfa çift tıkla (telefonda basılı tut)</div>
   <header class="top">
     <small id="brandSmall" hidden></small>
     <input id="examName" aria-label="Sınavın adı (dokunup değiştirebilirsin)" value="">
@@ -348,7 +354,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.6.1';
+const APP_VERSION = '1.6.2';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -440,6 +446,8 @@ function render() {
   $('classBar').innerHTML = D.classes.map(c => `<button class="ctab" role="tab" data-cls="${c.id}" aria-selected="${c.id === k.id}">${esc(c.name || 'Adsız sınıf')} <small>${c.students.length}</small></button>`).join('')
     + `<button class="ctab add" id="addClass">＋ Sınıf ekle</button>`;
   $('brandSmall').textContent = (k.name || 'Adsız sınıf') + ' · Sınav Puan Tablosu';
+  let renamed = false; try { renamed = !!localStorage.getItem('spt-renamed'); } catch (e) {}
+  $('classHint').hidden = renamed || !D.classes.some(c => /^(yeni sınıf|sınıf \d+)$/i.test(c.name || ''));
   $('examSel').innerHTML = classExams(k).map(x => `<option value="${x.id}">${esc(x.name || 'Adsız sınav')}</option>`).join('');
   $('examSel').value = e.id;
   $('sampleNote').hidden = !k.sample;
@@ -593,17 +601,56 @@ $('examSel').onchange = () => { D.cur = $('examSel').value; cls().lastExam = D.c
 /* ================= Sınıflar ================= */
 function switchClass(id) { if (listening) stopListening(); D.curClass = id; D.cur = null; fixCur(); cur = { r: 0, c: 0 }; $('pv').hidden = true; save(); render(); }
 $('classBar').addEventListener('click', ev => {
+  if (ev.target.closest('.editing')) return;
+  if (Date.now() < suppressClick) return;
   if (ev.target.closest('#addClass')) { addClass(); return; }
   const b = ev.target.closest('[data-cls]'); if (b && b.dataset.cls !== D.curClass) switchClass(b.dataset.cls);
 });
+/* Sınıf adını sekmenin üzerinde değiştirme: çift tıkla ya da (dokunmatikte) basılı tut */
+let suppressClick = 0, holdT = null;
+function renameClassTab(id) {
+  const k = D.classes.find(c => c.id === id); if (!k) return;
+  if (id !== D.curClass) switchClass(id);
+  const b = document.querySelector(`[data-cls="${id}"]`); if (!b || b.classList.contains('editing')) return;
+  b.classList.add('editing'); b.removeAttribute('role');
+  b.innerHTML = `<input class="cedit" id="cedit" value="${esc(k.name)}" placeholder="7/B" maxlength="30" autocomplete="off" aria-label="Sınıfın yeni adı"><span class="cok" role="button" tabindex="0">Tamam</span>`;
+  const inp = $('cedit'); const fit = () => inp.style.width = Math.max(4, inp.value.length + 1) + 'ch'; fit();
+  inp.focus(); inp.select();
+  let done = false;
+  const finish = keep => {
+    if (done) return; done = true; suppressClick = Date.now() + 600;
+    const v = inp.value.replace(/\s+/g, ' ').trim();
+    if (keep && v && v !== k.name) { k.name = v; save(); toast('Sınıfın adı “' + v + '” oldu'); try { localStorage.setItem('spt-renamed', '1'); } catch (e) {} }
+    render();
+  };
+  inp.addEventListener('input', fit);
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); finish(true); } else if (e.key === 'Escape') { e.preventDefault(); finish(false); } });
+  inp.addEventListener('blur', () => setTimeout(() => finish(true), 120));
+  b.querySelector('.cok').addEventListener('pointerdown', e => { e.preventDefault(); finish(true); });
+}
+$('classBar').addEventListener('dblclick', ev => {
+  const b = ev.target.closest('[data-cls]'); if (!b || b.classList.contains('editing')) return;
+  ev.preventDefault(); renameClassTab(b.dataset.cls);
+});
+$('classBar').addEventListener('pointerdown', ev => {
+  const b = ev.target.closest('[data-cls]'); if (!b || b.classList.contains('editing') || ev.pointerType === 'mouse') return;
+  const x0 = ev.clientX, y0 = ev.clientY, id = b.dataset.cls;
+  clearTimeout(holdT);
+  holdT = setTimeout(() => { holdT = null; suppressClick = Date.now() + 700; try { navigator.vibrate && navigator.vibrate(15); } catch (e) {} renameClassTab(id); }, 550);
+  const cancel = e => { if (e && e.type === 'pointermove' && Math.hypot(e.clientX - x0, e.clientY - y0) < 10) return; clearTimeout(holdT); holdT = null; off(); };
+  const off = () => { removeEventListener('pointermove', cancel); removeEventListener('pointerup', cancel); removeEventListener('pointercancel', cancel); };
+  addEventListener('pointermove', cancel); addEventListener('pointerup', cancel); addEventListener('pointercancel', cancel);
+});
+$('classBar').addEventListener('contextmenu', ev => { if (ev.target.closest('[data-cls]')) ev.preventDefault(); });
 function addClass() {
   const pts = (ex() || {}).points, lbs = ex() ? labelsOf(ex()) : null;
   const k = { id: uid(), name: 'Yeni sınıf', students: [] }; D.classes.push(k);
   const e = newExamFor(k, pts, lbs); D.exams.push(e);
   D.curClass = k.id; D.cur = e.id; k.lastExam = e.id; cur = { r: 0, c: 0 }; $('pv').hidden = true;
   save(); render(); $('stuPanel').open = true;
-  $('clsName').focus(); $('clsName').select(); $('clsName').scrollIntoView({ block: 'center', behavior: 'smooth' });
-  toast('Yeni sınıf açıldı. Adını yaz, sonra öğrencileri ekle');
+  renameClassTab(k.id);
+  const t = document.querySelector(`[data-cls="${k.id}"]`); t && t.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' });
+  toast('Sınıfın adını yaz, sonra Öğrenciler bölümünden listeyi ekle');
 }
 $('clsName').addEventListener('input', () => {
   const k = cls(); k.name = $('clsName').value.trim();
