@@ -231,6 +231,8 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 .engbox{background:var(--accent-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;font-size:14px}
 .engbox .eq{font:600 13px var(--mono);background:var(--surface);border-radius:6px;padding:1px 7px;white-space:nowrap}
 .qcol .wt{font:600 11px var(--mono);color:var(--accent)}
+.vwcheck{background:var(--good-soft);color:var(--ink);border-radius:10px;padding:8px 10px}
+.vwopt{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);cursor:pointer}
 #toast .tact{margin-left:10px;border:0;border-radius:8px;padding:5px 10px;background:var(--accent);color:var(--surface);font:700 13px var(--body)}
 #toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
   padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
@@ -384,6 +386,15 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
     </div>
   </details>
 </div>
+<div class="modal" id="voiceWarn" role="alertdialog" aria-modal="true" aria-labelledby="vwTitle" aria-describedby="vwText" hidden>
+  <div class="mcard">
+    <h3 id="vwTitle">⚠️ Sesle girişte dikkat</h3>
+    <p id="vwText">Ortamda farklı sesler (konuşmalar, gürültü) varsa uygulama söylediklerini <b>yanlış anlayabilir</b>. Sakin bir ortamda, puanları ve isimleri net ve tek tek söyle.</p>
+    <p class="vwcheck">✅ İşin bitince girilen puanları <b>mutlaka kontrol et</b>.</p>
+    <label class="vwopt"><input type="checkbox" id="vwHide"> Bir daha gösterme</label>
+    <div class="mfoot"><button class="btn small" id="vwCancel">Vazgeç</button><button class="btn small primary" id="vwGo">Anladım, başla</button></div>
+  </div>
+</div>
 <div class="modal" id="aboutBox" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
   <div class="mcard">
     <h3 id="aboutTitle">ℹ️ Sınav Puan Tablosu</h3>
@@ -439,7 +450,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.10.0';
+const APP_VERSION = '1.10.1';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -1345,7 +1356,7 @@ function applySpeech(text) {
   for (const o of ops) {
     if (o.jump != null) { cur = { r: o.jump, c: 0 }; markCur(); scrollToCur(); said.push(e.students[o.jump].name); continue; }
     if (o.col != null) { if (o.col >= 1 && o.col <= e.points.length) { cur.c = o.col - 1; markCur(); scrollToCur(); said.push(colName(e, o.col - 1)); } continue; }
-    if (o.cmd === 'stop') { stopListening(); heard('Dinleme kapatıldı', 'ok'); return; }
+    if (o.cmd === 'stop') { stopListening(); heard('Dinleme kapatıldı · girilen puanları kontrol etmeyi unutma', 'ok'); return; }
     if (o.cmd === 'next') { move(1); continue; }
     if (o.cmd === 'prev') { move(-1); continue; }
     if (o.cmd === 'del') { setScore(cur.r, cur.c, null, { flash: true }); said.push('silindi'); continue; }
@@ -1413,7 +1424,23 @@ function setOn(on) {
   document.querySelectorAll('td.cell input').forEach(i => i.readOnly = on);
   if (on) { document.activeElement && document.activeElement.blur && document.activeElement.blur(); heard('Dinliyorum… puanı söyle'); wake(); }
 }
-$('micBtn').onclick = () => listening ? (stopListening(), heard('Dinleme kapatıldı')) : startListening();
+/* Sesle girişten önce uyarı: gürültülü ortamda yanlış anlayabilir, sonunda kontrol et */
+let vwNext = null;
+function voiceWarnThen(fn) {
+  let hide = false; try { hide = !!localStorage.getItem('spt-voice-warn-off'); } catch (e) {}
+  if (hide) { fn(); return; }
+  vwNext = fn; $('vwHide').checked = false; $('voiceWarn').hidden = false; $('vwGo').focus();
+}
+function closeVoiceWarn(go) {
+  $('voiceWarn').hidden = true;
+  if (go && $('vwHide').checked) { try { localStorage.setItem('spt-voice-warn-off', '1'); } catch (e) {} }
+  const fn = vwNext; vwNext = null; if (go && fn) fn();
+}
+$('vwGo').onclick = () => closeVoiceWarn(true);
+$('vwCancel').onclick = () => closeVoiceWarn(false);
+$('voiceWarn').addEventListener('click', ev => { if (ev.target === $('voiceWarn')) closeVoiceWarn(false); });
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('voiceWarn').hidden) closeVoiceWarn(false); });
+$('micBtn').onclick = () => listening ? (stopListening(), heard('Dinleme kapatıldı · girilen puanları kontrol etmeyi unutma', 'ok')) : voiceWarnThen(startListening);
 
 function speak(t) {
   if (!('speechSynthesis' in window)) return;
@@ -1530,9 +1557,9 @@ function stopNameMic() {
   setNameOn(false);
   try { nameRec && nameRec.stop(); } catch (e) {}
   try { const nat = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition; nat && isApk() && nat.stop(); } catch (e) {}
-  if ($('namesIn').value.trim()) nameMsg('İsimler kutuda. Kontrol et ve “Listeye ekle”ye bas.'); else nameMsg('');
+  if ($('namesIn').value.trim()) nameMsg('İsimler kutuda. Yanlış duyulan var mı kontrol et, sonra “Listeye ekle”ye bas.'); else nameMsg('');
 }
-$('nameMic').onclick = () => nameOn ? stopNameMic() : startNameMic();
+$('nameMic').onclick = () => nameOn ? stopNameMic() : voiceWarnThen(startNameMic);
 $('addNames').addEventListener('click', () => { if (nameOn) stopNameMic(); nameMsg(''); }, true);
 
 /* ================= İlk açılış tanıtımı =================
