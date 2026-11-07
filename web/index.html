@@ -377,6 +377,7 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
         <b>Sesle giriş</b>
         <div><code>15</code> <code>sekiz buçuk</code> <code>tam</code> puan yazar · <code>geç</code> <code>geri</code> <code>sil</code> <code>dur</code></div>
         <div>Öğrencinin ya da sütunun adını söyle: <code>Ayşe 10 8 15</code> · <code>okuma 18</code> · <code>3. soru 12</code></div>
+        <div>Okul numarasıyla da geçebilirsin: <code>412 Ayşe Demir 10 8</code> · <code>numara 412 10 8</code></div>
       </div>
       <div class="row">
         <button class="btn small danger" id="clearScores">Puanları sıfırla</button>
@@ -450,7 +451,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.10.1';
+const APP_VERSION = '1.10.2';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -1244,7 +1245,6 @@ function buildXlsx() {
   const B = '<border><left style="thin"><color rgb="FF8C96A5"/></left><right style="thin"><color rgb="FF8C96A5"/></right><top style="thin"><color rgb="FF8C96A5"/></top><bottom style="thin"><color rgb="FF8C96A5"/></bottom><diagonal/></border>';
   const styles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<numFmts count="1"><numFmt numFmtId="164" formatCode="0.##"/></numFmts>
 <fonts count="5"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font><font><sz val="10"/><color rgb="FF5B6677"/><name val="Calibri"/></font><font><b/><sz val="11"/><color rgb="FFCF3428"/><name val="Calibri"/></font></fonts>
 <fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFDCE5F7"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFF1F4F9"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFDE6E3"/><bgColor indexed="64"/></patternFill></fill></fills>
 <borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border>${B}</borders>
@@ -1253,12 +1253,12 @@ function buildXlsx() {
 <xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>
 <xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf>
 <xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment vertical="center"/></xf>
-<xf numFmtId="164" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-<xf numFmtId="164" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
 <xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/>
 <xf numFmtId="0" fontId="3" fillId="0" borderId="0" xfId="0" applyFont="1"/>
-<xf numFmtId="164" fontId="1" fillId="2" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
-<xf numFmtId="164" fontId="4" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
+<xf numFmtId="0" fontId="4" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment horizontal="center" vertical="center"/></xf>
 </cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
   const sheetName = xesc((k.name || 'Puanlar').replace(/[\\\/?*\[\]:]/g, '-').slice(0, 31) || 'Puanlar');
   return zipStore([
@@ -1280,7 +1280,7 @@ $('csvBtn').onclick = () => {
 
 /* ================= Konuşmayı sayıya çevirme ================= */
 const W = { 'sıfır': 0, 'bir': 1, 'iki': 2, 'üç': 3, 'dört': 4, 'beş': 5, 'altı': 6, 'yedi': 7, 'sekiz': 8, 'dokuz': 9,
-  'on': 10, 'yirmi': 20, 'otuz': 30, 'kırk': 40, 'elli': 50, 'altmış': 60, 'yetmiş': 70, 'seksen': 80, 'doksan': 90, 'yüz': 100 };
+  'bin': 1000, 'on': 10, 'yirmi': 20, 'otuz': 30, 'kırk': 40, 'elli': 50, 'altmış': 60, 'yetmiş': 70, 'seksen': 80, 'doksan': 90, 'yüz': 100 };
 const lower = s => s.replace(/I/g, 'ı').replace(/İ/g, 'i').toLocaleLowerCase('tr');
 const norm = s => lower(s).replace(/[.,!?;:'’"“”()]/g, ' ').replace(/\s+/g, ' ').trim();
 const CMD = { next: ['geç', 'atla', 'sonraki', 'ileri', 'boş', 'pas'], prev: ['geri', 'önceki'], del: ['sil', 'temizle'], stop: ['dur', 'bitti', 'kapat', 'tamam bitti'], full: ['tam'] };
@@ -1324,16 +1324,26 @@ function parseSpeech(text, students, labels) {
     }
     if (w === 'buçuk' || w === 'yarım') { if (num != null) { num += 0.5; flush(); } else out.push({ v: 0.5 }); continue; }
     if (W[w] != null) {
+      // Türkçe sayı sözcükleri: "on beş" 15, "dört yüz on iki" 412, "bin yirmi bir" 1021; "on beş yirmi" iki ayrı sayı
       const v = W[w], last = parts[parts.length - 1];
-      if (num == null) { num = v; parts = [v]; continue; }
-      if (v === 100 && num < 10 && parts.length === 1) { num *= 100; parts = [100]; continue; }
-      const okAdd = (v < 10 && last >= 10) || (v >= 10 && v < 100 && last === 100) || (v >= 10 && v < 100 && last >= 100);
-      if (okAdd && v > 0) { num += v; parts.push(v); continue; }
+      if (num == null || v === 0) { flush(); num = v; parts = [v]; continue; }
+      if (v === 1000 && num < 1000) { num = num * 1000; parts.push(1000); continue; }
+      if (v === 100 && (last === 1000 || (last < 10 && last > 0 && num % 1000 === last && parts.filter(x => x === 100).length === 0))) {
+        num = last === 1000 ? num + 100 : num - last + last * 100; parts.push(100); continue;
+      }
+      if (v >= 10 && v < 100 && last >= 100) { num += v; parts.push(v); continue; }
+      if (v > 0 && v < 10 && last >= 10) { num += v; parts.push(v); continue; }
       flush(); num = v; parts = [v]; continue;
     }
     if (w === 'soru' || w === 'soruya' || w === 'sorunun' || w === 'sorusu') {
       if (num != null) { out.push({ col: num }); num = null; parts = []; }
       else if (out.length && out[out.length - 1].v != null) out.push({ col: out.pop().v });
+      continue;
+    }
+    // okul numarası: "numara 412", "no 412", "412 numara(lı)"
+    if (/^(numara|numaralı|numarası|numarasına|numaralıya|no)$/.test(w)) {
+      if (num != null || (out.length && out[out.length - 1].v != null && /^numara/.test(w))) { const n = num != null ? num : out.pop().v; num = null; parts = []; out.push({ no: n }); }
+      else out.push({ noNext: true });
       continue;
     }
     if (CMD.full.includes(w)) { flush(); out.push({ cmd: 'full' }); if (toks[i + 1] === 'puan') i++; continue; }
@@ -1344,6 +1354,19 @@ function parseSpeech(text, students, labels) {
     // tanınmayan kelime (ör. "puan", "soru"): sayıyı bölmeden geç
   }
   flush();
+  // "numara" sonrası gelen sayı → okul numarası
+  for (let i = 0; i < out.length; i++) if (out[i].noNext) { if (out[i + 1] && out[i + 1].v != null) { out.splice(i, 2, { no: out[i + 1].v }); } else out.splice(i--, 1); }
+  // okul numarasını öğrenciye çevir
+  const byNo = n => students.findIndex(s => s.no && String(s.no).replace(/^0+/, '') === String(n));
+  for (let i = 0; i < out.length; i++) if (out[i].no != null) { const r = byNo(out[i].no); out[i] = r >= 0 ? { jump: r } : { badNo: out[i].no }; }
+  // isimle birlikte söylenen numara ("412 Ayşe Demir" ya da "Ayşe Demir 412") puan sayılmaz
+  for (let i = 0; i < out.length; i++) if (out[i].jump != null) {
+    const no = String(students[out[i].jump].no || '').replace(/^0+/, ''); if (!no) continue;
+    if (out[i + 1] && out[i + 1].v != null && String(out[i + 1].v) === no) out.splice(i + 1, 1);
+    if (out[i - 1] && out[i - 1].v != null && String(out[i - 1].v) === no) { out.splice(i - 1, 1); i--; }
+  }
+  // aynı öğrenciye arka arkaya iki atlama tek atlamadır
+  for (let i = out.length - 1; i > 0; i--) if (out[i].jump != null && out[i - 1].jump === out[i].jump) out.splice(i, 1);
   return out;
 }
 
@@ -1355,12 +1378,14 @@ function applySpeech(text) {
   const auto = $('optAuto').checked;
   for (const o of ops) {
     if (o.jump != null) { cur = { r: o.jump, c: 0 }; markCur(); scrollToCur(); said.push(e.students[o.jump].name); continue; }
+    if (o.badNo != null) { heard(`${o.badNo} numaralı öğrenci bulunamadı`, 'err'); beep(220); return; }
     if (o.col != null) { if (o.col >= 1 && o.col <= e.points.length) { cur.c = o.col - 1; markCur(); scrollToCur(); said.push(colName(e, o.col - 1)); } continue; }
     if (o.cmd === 'stop') { stopListening(); heard('Dinleme kapatıldı · girilen puanları kontrol etmeyi unutma', 'ok'); return; }
     if (o.cmd === 'next') { move(1); continue; }
     if (o.cmd === 'prev') { move(-1); continue; }
     if (o.cmd === 'del') { setScore(cur.r, cur.c, null, { flash: true }); said.push('silindi'); continue; }
     const v = o.cmd === 'full' ? e.points[cur.c] : o.v;
+    if (o.v != null && v > e.points[cur.c]) { const rr = e.students.findIndex(st => st.no && String(st.no).replace(/^0+/, '') === String(v)); if (rr >= 0) { cur = { r: rr, c: 0 }; markCur(); scrollToCur(); said.push(e.students[rr].name); continue; } }
     const r = cur.r, c = cur.c;
     if (!setScore(r, c, v, { flash: true })) return;
     said.push(`${colName(e, c)} ${fmt(v)}`);
