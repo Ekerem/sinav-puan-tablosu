@@ -209,6 +209,14 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 .tour .dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
 .tour .dots i.on{background:var(--accent);width:18px;border-radius:4px}
 .tour .skip{border:0;background:none;color:var(--muted);font:700 13px var(--body);padding:6px 4px;cursor:pointer;text-decoration:underline}
+/* hakkında kutusu */
+.modal{position:fixed;inset:0;z-index:90;background:rgba(10,16,28,.55);display:grid;place-items:center;
+  padding:16px max(16px,env(safe-area-inset-right,0px)) 16px max(16px,env(safe-area-inset-left,0px))}
+.mcard{background:var(--surface);color:var(--ink);border-radius:16px;padding:20px;width:min(420px,100%);display:flex;flex-direction:column;gap:12px;
+  box-shadow:0 18px 40px -12px rgba(0,0,0,.5)}
+.mcard h3{margin:0;font:800 19px/1.2 var(--display)}
+.mcard p{margin:0;font-size:15px;line-height:1.6}
+.mfoot{display:flex;align-items:center;justify-content:space-between;gap:10px}
 #toast .tact{margin-left:10px;border:0;border-radius:8px;padding:5px 10px;background:var(--accent);color:var(--surface);font:700 13px var(--body)}
 #toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
   padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
@@ -329,6 +337,7 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
         <button class="btn small" id="updBtn">🔄 Güncelle</button>
         <button class="btn small" id="installBtn" hidden>💻 Bilgisayara yükle</button>
         <button class="btn small" id="tourBtn">👋 Tanıtımı göster</button>
+        <button class="btn small" id="aboutBtn">ℹ️ Hakkında</button>
         <button class="btn small" id="csvBtn">⬇ Excel dosyası indir</button>
       </div>
       <div class="help" id="installHelp" hidden></div>
@@ -348,6 +357,13 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
       </div>
     </div>
   </details>
+</div>
+<div class="modal" id="aboutBox" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" hidden>
+  <div class="mcard">
+    <h3 id="aboutTitle">ℹ️ Sınav Puan Tablosu</h3>
+    <p>Bu program <b>Eyüp USLU</b> tarafından geliştirilmiş olup tüm hakları saklıdır. Öğretmenlerin ve eğitim kurumlarının kullanımı için tamamen ücretsizdir. Kaynak kodları değiştirilemez, ticari amaçla satılamaz veya çoğaltılamaz.</p>
+    <div class="mfoot"><span class="msg" id="aboutVer"></span><button class="btn small primary" id="aboutClose">Tamam</button></div>
+  </div>
 </div>
 <div id="toast" hidden></div>
 <div id="sign">Made by Us</div>
@@ -397,7 +413,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.8.0';
+const APP_VERSION = '1.8.1';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -1471,6 +1487,12 @@ function endTour() {
   scrollTo({ top: 0, behavior: 'smooth' });
 }
 $('tourBtn').onclick = () => { $('morePanel').open = false; startTour(); };
+/* Hakkında */
+function openAbout() { $('aboutVer').textContent = 'Sürüm ' + APP_VERSION + ' · Made by Us'; $('aboutBox').hidden = false; $('aboutClose').focus(); }
+function closeAbout() { $('aboutBox').hidden = true; $('aboutBtn').focus({ preventScroll: true }); }
+$('aboutBtn').onclick = openAbout; $('aboutClose').onclick = closeAbout;
+$('aboutBox').addEventListener('click', ev => { if (ev.target === $('aboutBox')) closeAbout(); });
+addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('aboutBox').hidden) closeAbout(); });
 
 load(); render(); updateInstallUI();
 if (firstRun && !lsGet('spt-tour-done')) setTimeout(startTour, 500); else if (!lsGet('spt-tour-done')) lsSet('spt-tour-done', '1');
