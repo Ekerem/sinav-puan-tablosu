@@ -211,6 +211,11 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
     </div>
   </header>
   <div class="msg" id="updmsg" hidden></div>
+  <div class="note" id="installNote" hidden>
+    <span>💻 Bu tabloyu bilgisayarına <b>uygulama</b> olarak yükleyebilirsin.</span>
+    <span class="row"><button class="btn small primary" id="installBtn2">Bilgisayara yükle</button>
+    <button class="btn small" id="installLater">Daha sonra</button></span>
+  </div>
 
   <section class="voice" aria-live="polite">
     <button id="micBtn" aria-label="Sesle puan girmeyi başlat">
@@ -287,8 +292,10 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
     <div class="pbody">
       <div class="row">
         <button class="btn small" id="updBtn">🔄 Güncelle</button>
+        <button class="btn small" id="installBtn" hidden>💻 Bilgisayara yükle</button>
         <button class="btn small" id="csvBtn">⬇ Excel dosyası indir</button>
       </div>
+      <div class="help" id="installHelp" hidden></div>
       <div class="row opts">
         <label><input type="checkbox" id="optAuto" checked> Puandan sonra sıradakine geç</label>
         <label><input type="checkbox" id="optSpeak"> Puanı sesli tekrar et</label>
@@ -354,7 +361,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.6.2';
+const APP_VERSION = '1.7.0';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -1275,7 +1282,42 @@ async function checkUpdate() {
 }
 $('updBtn').onclick = checkUpdate;
 
-load(); render();
+/* ================= Bilgisayara yükleme (masaüstü uygulaması) =================
+   Chrome ve Edge sayfayı kendi penceresi, masaüstü ve başlat menüsü simgesiyle uygulama olarak kurar.
+   Kayıtlar aynı tarayıcıdakilerle ortaktır; güncellemeler kendiliğinden gelir. */
+let installEvt = null;
+const isStandalone = () => { try { return matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: window-controls-overlay)').matches || navigator.standalone === true; } catch (e) { return false; } };
+const isDesktop = () => { try { return matchMedia('(pointer: fine)').matches && !/Android|iPhone|iPad|Mobile/i.test(navigator.userAgent); } catch (e) { return false; } };
+const lsGet = k => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+function installGuide() {
+  const ua = navigator.userAgent;
+  if (/Edg\//.test(ua)) return 'Edge’de sağ üstteki <b>⋯</b> menüsünden <b>Uygulamalar → Bu siteyi uygulama olarak yükle</b>’yi seç.';
+  if (/Chrome\//.test(ua)) return 'Chrome’da adres çubuğunun sağındaki <b>yükle simgesine</b> (ekran ve ok) bas ya da <b>⋮ menüsü → Yayınla, kaydet ve paylaş → Sayfayı uygulama olarak yükle</b>’yi seç.';
+  if (/Safari\//.test(ua) && /Mac/.test(ua)) return 'Safari’de üst menüden <b>Dosya → Dock’a Ekle</b>’yi seç.';
+  return 'Bu tarayıcı uygulama yüklemeyi desteklemiyor. Sayfayı <b>Google Chrome</b> ya da <b>Microsoft Edge</b> ile açıp buradan yükleyebilirsin.';
+}
+function updateInstallUI() {
+  const can = !isApk() && !isStandalone() && isDesktop();
+  $('installBtn').hidden = !can;
+  $('installNote').hidden = !(can && installEvt && !lsGet('spt-install-later'));
+}
+async function doInstall() {
+  if (installEvt) {
+    const ev = installEvt; installEvt = null;
+    try { ev.prompt(); const r = await ev.userChoice; if (r && r.outcome === 'accepted') { toast('Yükleniyor… Masaüstünde ve başlat menüsünde “Sınav Puan Tablosu” olarak açılacak'); lsSet('spt-install-later', '1'); } } catch (e) {}
+    updateInstallUI(); return;
+  }
+  $('morePanel').open = true; const h = $('installHelp'); h.hidden = false; h.innerHTML = '<b>Bilgisayara yükleme</b><div>' + installGuide() + '</div>';
+  h.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); installEvt = ev; updateInstallUI(); });
+addEventListener('appinstalled', () => { installEvt = null; lsSet('spt-install-later', '1'); updateInstallUI(); toast('Uygulama yüklendi ✓ Masaüstünden açabilirsin'); });
+$('installBtn').onclick = doInstall; $('installBtn2').onclick = doInstall;
+$('installLater').onclick = () => { lsSet('spt-install-later', '1'); updateInstallUI(); toast('Diğer bölümünden istediğin zaman yükleyebilirsin'); };
+if (isStandalone()) document.documentElement.classList.add('app-window');
+
+load(); render(); updateInstallUI();
 try { $('csvBtn').hidden = isApk() || window.self !== window.top; } catch (e) { $('csvBtn').hidden = true; }
 if (ex().students.length) $('setPanel').open = false;
 if (isApk()) setTimeout(() => { window.__live.check(APP_VERSION).then(r => { if (r.status === 'ready') showLiveNote(r.version); }).catch(() => {}); }, 2500);

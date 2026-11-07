@@ -9,6 +9,11 @@ Puanlar klavyeyle ya da **sesle** girilebilir.
 - Birden çok sınav kaydedilir; yeni sınav aynı öğrenci listesiyle açılır.
 - "Excel'e kopyala" ile tablo Excel'e / e-Okul'a yapıştırılır, web sürümünde CSV indirilebilir.
 
+## Bilgisayara (masaüstü uygulaması) yükleme
+Web sürümünü **Chrome** ya da **Edge** ile aç. Üstte çıkan **Bilgisayara yükle** düğmesine (ya da Diğer → 💻 Bilgisayara yükle) bas.
+Uygulama kendi penceresinde açılır, masaüstüne ve başlat menüsüne simgesi eklenir, internetsiz de çalışır ve
+güncellemeler kendiliğinden gelir. Sesle giriş de çalışır. Mac'te Safari: Dosya → Dock'a Ekle.
+
 ## Sesle giriş
 Mikrofona bas, seçili hücreden itibaren puanları söyle: `15`, `sekiz buçuk`, `tam`, `geç`, `geri`, `sil`, `dur`.
 Öğrenci adı söylenince ona atlar (`Ayşe 10 8 15`), `3. soru 12` o soruya atlayıp yazar.
