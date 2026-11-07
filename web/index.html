@@ -226,6 +226,11 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 .clslist label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
 .clslist .all{background:transparent;border-style:dashed;color:var(--accent)}
 #copyGo{align-self:flex-start}
+/* İngilizce hesabı */
+#engBtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+.engbox{background:var(--accent-soft);border-radius:12px;padding:10px 12px;display:flex;flex-direction:column;gap:5px;font-size:14px}
+.engbox .eq{font:600 13px var(--mono);background:var(--surface);border-radius:6px;padding:1px 7px;white-space:nowrap}
+.qcol .wt{font:600 11px var(--mono);color:var(--accent)}
 #toast .tact{margin-left:10px;border:0;border-radius:8px;padding:5px 10px;background:var(--accent);color:var(--surface);font:700 13px var(--body)}
 #toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
   padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
@@ -326,6 +331,12 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
         <label class="field" style="flex-direction:row;align-items:center;gap:8px"><span>Soru sayısı</span>
           <input class="numin" id="qCount" type="number" min="1" max="30" inputmode="numeric"></label>
         <button class="btn small" id="evenPts">Eşit dağıt</button>
+        <button class="btn small" id="engBtn" aria-pressed="false">🇬🇧 İngilizce öğretmeniyim</button>
+      </div>
+      <div class="engbox" id="engBox" hidden>
+        <b>🇬🇧 İngilizce hesabı açık</b>
+        <div>Toplam = <span class="eq">Yazılı sorular %50</span> + <span class="eq">Konuşma %25</span> + <span class="eq">Dinleme %25</span> <span class="msg">(100 üzerinden)</span></div>
+        <div class="msg" id="engDetail"></div>
       </div>
       <div class="qpts" id="qpts"></div>
       <div class="addcols" id="addCols">
@@ -428,7 +439,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.9.0';
+const APP_VERSION = '1.10.0';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -506,9 +517,25 @@ function rowsOf(e) {
   });
 }
 const ex = () => { const e = D.exams.find(x => x.id === D.cur); if (e && !Object.getOwnPropertyDescriptor(e, 'students')) Object.defineProperty(e, 'students', { get() { return rowsOf(this); }, enumerable: false, configurable: true }); return e; };
-const maxTotal = e => e.points.reduce((a, b) => a + (+b || 0), 0);
+const rawMax = e => e.points.reduce((a, b) => a + (+b || 0), 0);
+/* İngilizce hesabı: yazılı soruların %50'si + Konuşma %25 + Dinleme %25 (100 üzerinden) */
+const ENG_W = { yaz: 50, kon: 25, din: 25 };
+function engParts(e) {
+  // yazılı = yalnızca soru sütunları (adı boş ya da "soru" geçen); Okuma, Yazma gibi diğer sütunlar hesaba katılmaz
+  const L = labelsOf(e), parts = { yaz: [], kon: [], din: [], dis: [] };
+  e.points.forEach((_, i) => { const n = lower(L[i] || ''); parts[/konuşma|speaking/.test(n) ? 'kon' : /dinleme|listening/.test(n) ? 'din' : (!n || /soru|question/.test(n)) ? 'yaz' : 'dis'].push(i); });
+  return parts;
+}
+const maxTotal = e => e && e.eng ? 100 : rawMax(e);
+function totalOf(e, sc) {
+  let n = 0; sc.forEach(v => { if (v != null) n++; });
+  if (!e.eng) { let t = 0; sc.forEach(v => { if (v != null) t += v; }); return { t, n }; }
+  const P = engParts(e); let t = 0;
+  Object.keys(ENG_W).forEach(k => { const max = P[k].reduce((a, i) => a + (+e.points[i] || 0), 0); if (!max) return; const got = P[k].reduce((a, i) => a + (sc[i] || 0), 0); t += got / max * ENG_W[k]; });
+  return { t: Math.round(t * 100) / 100, n };
+}
 const fmt = v => v == null || v === '' ? '' : (Math.round(v * 100) / 100).toString().replace('.', ',');
-function total(s) { let t = 0, n = 0; s.scores.forEach(v => { if (v != null) { t += v; n++; } }); return { t, n }; }
+function total(s) { return totalOf(ex(), s.scores); }
 
 /* ================= İmleç ================= */
 let cur = { r: 0, c: 0 };
@@ -535,9 +562,7 @@ function render() {
     <input class="qname" id="qn${i}" data-n="${i}" value="${esc(L[i])}" placeholder="${i + 1}. soru" aria-label="${i + 1}. sütunun adı" autocomplete="off">
     <input id="pt${i}" data-i="${i}" type="number" min="0" step="0.5" inputmode="decimal" enterkeyhint="${i < e.points.length - 1 ? 'next' : 'done'}" value="${p}" aria-label="${esc(colName(e, i))} puanı">
     ${e.points.length > 1 ? `<button class="rm" data-rm="${i}" aria-label="${esc(colName(e, i))} sütununu sil">×</button>` : ''}</div>`).join('');
-  const mt = maxTotal(e);
-  $('sumPill').textContent = 'Toplam ' + fmt(mt);
-  $('sumPill').classList.toggle('warn', mt !== 100);
+  updSum(); renderEng();
   $('stuCount').textContent = e.students.length + ' öğrenci';
   renderCopy();
   renderTable();
@@ -551,7 +576,7 @@ function renderTable() {
     $('stuPanel').open = true; updVoiceWhere(); return;
   }
   const ro = listening ? ' readonly' : '';
-  let h = `<thead><tr><th class="name">Öğrenci</th>${e.points.map((p, i) => `<th class="${labelsOf(e)[i] ? 'lab' : ''}" title="${esc(colName(e, i))}"><b>${esc(colShort(e, i))}</b>${fmt(p)} p</th>`).join('')}<th class="total"><b>Top.</b>${fmt(maxTotal(e))}</th></tr></thead><tbody>`;
+  let h = `<thead><tr><th class="name">Öğrenci</th>${e.points.map((p, i) => `<th class="${labelsOf(e)[i] ? 'lab' : ''}" title="${esc(colName(e, i))}"><b>${esc(colShort(e, i))}</b>${fmt(p)} p</th>`).join('')}<th class="total"${e.eng ? ' title="Yazılı %50 + Konuşma %25 + Dinleme %25"' : ''}><b>${e.eng ? 'Puan' : 'Top.'}</b>${fmt(maxTotal(e))}</th></tr></thead><tbody>`;
   e.students.forEach((s, r) => {
     h += `<tr data-r="${r}"><td class="name"><div class="nm"><span class="no">${r + 1}</span><span class="tx" title="${esc(s.name)}">${esc(s.name)}</span>${s.no ? `<span class="okno">${esc(s.no)}</span>` : ''}<button class="del" data-del="${r}" aria-label="${esc(s.name)} satırını sil">×</button></div></td>`;
     e.points.forEach((p, c) => {
@@ -752,12 +777,14 @@ $('qpts').addEventListener('input', ev => {
 $('qpts').addEventListener('keydown', ev => { if (ev.key === 'Enter' && ev.target.dataset.n != null) ev.target.blur(); });
 function addColumn(label) {
   const e = ex(); labelsOf(e);
-  e.points.push(10); e.labels.push(label === '?' ? '' : label);
-  Object.values(e.scores).forEach(a => { while (a.length < e.points.length - 1) a.push(null); a.push(null); });
+  // yeni soru, son sorunun hemen arkasına (Okuma, Konuşma gibi sütunlardan önce) girer
+  let i = e.points.length;
+  if (label === '') { let last = -1; e.labels.forEach((l, k) => { if (!l || /soru|question/.test(lower(l))) last = k; }); i = last + 1; }
+  e.points.splice(i, 0, 10); e.labels.splice(i, 0, label === '?' ? '' : label);
+  Object.values(e.scores).forEach(a => { while (a.length < e.points.length - 1) a.push(null); a.splice(i, 0, null); });
   save(); render();
-  const i = e.points.length - 1;
   if (label === '?') { $('qn' + i).focus(); toast('Sütunun adını yaz, puanını gir'); }
-  else { $('pt' + i).focus(); $('pt' + i).select(); toast(`${colName(e, i)} eklendi (10 puan). Puanını değiştirebilirsin`); }
+  else { $('pt' + i).focus(); $('pt' + i).select(); toast(`${colName(e, i)} eklendi (10 puan). Puanını değiştirebilirsin`); $('pt' + i).scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
 }
 $('addCols').addEventListener('click', ev => { const b = ev.target.closest('[data-add]'); if (b) addColumn(b.dataset.add); });
 let rmArmed = null, rmT;
@@ -780,8 +807,7 @@ $('qpts').addEventListener('change', ev => {
   const i = +ev.target.dataset.i, v = parseTyped(ev.target.value), e = ex();
   e.points[i] = Number.isNaN(v) || v == null ? 0 : v; save();
   if (document.activeElement !== ev.target) ev.target.value = e.points[i];
-  const mt = maxTotal(e); $('sumPill').textContent = 'Toplam ' + fmt(mt); $('sumPill').classList.toggle('warn', mt !== 100);
-  renderTable();
+  updSum(); renderEng(); renderTable();
 });
 /* Tab / Enter: sıradaki sorunun puan kutusuna geç */
 $('qpts').addEventListener('keydown', ev => {
@@ -808,7 +834,7 @@ function renderCopy() {
     $('copyList').innerHTML = ''; $('copyGo').hidden = true; return;
   }
   $('copyGo').hidden = false;
-  $('copyInfo').textContent = `“${e.name || 'Bu sınav'}” sınavının soruları ve puanları (${e.points.length} soru, toplam ${fmt(maxTotal(e))}) seçtiğin sınıflara aynen aktarılır.`;
+  $('copyInfo').textContent = `“${e.name || 'Bu sınav'}” sınavının soruları ve puanları (${e.points.length} soru, ${e.eng ? 'İngilizce hesabı' : 'toplam ' + fmt(maxTotal(e))}) seçtiğin sınıflara aynen aktarılır.`;
   $('copyList').innerHTML = others.map(c => `<label><input type="checkbox" data-copy="${c.id}" ${copySel.has(c.id) ? 'checked' : ''}> ${esc(c.name || 'Adsız sınıf')} <small>${c.students.length}</small></label>`).join('')
     + (others.length > 1 ? `<label class="all"><input type="checkbox" data-copy="*" ${others.every(c => copySel.has(c.id)) ? 'checked' : ''}> Tümü</label>` : '');
   $('copyGo').disabled = !copySel.size;
@@ -829,12 +855,38 @@ $('copyGo').onclick = () => {
     const blank = x => !Object.values(x.scores || {}).some(a => (a || []).some(v => v != null));
     if (!t && exams.length === 1 && blank(exams[0]) && /^\d+\. sınav$/i.test(exams[0].name || '')) t = exams[0];
     if (!t) { t = newExamFor(k, e.points, L); D.exams.push(t); }
-    t.name = e.name; t.points = e.points.slice(); t.labels = L.slice();
+    t.name = e.name; t.points = e.points.slice(); t.labels = L.slice(); t.eng = !!e.eng;
     Object.values(t.scores).forEach(a => { while (a.length < t.points.length) a.push(null); a.length = t.points.length; });
     k.lastExam = t.id; done.push(k.name || 'Adsız sınıf');
   });
   copySel.clear(); save(); renderCopy();
   if (done.length) toast('✓ Puanlar kopyalandı: ' + done.join(', '));
+};
+function updSum() {
+  const e = ex(); if (e.eng) { $('sumPill').textContent = 'İngilizce · 100'; $('sumPill').classList.remove('warn'); return; }
+  const mt = rawMax(e); $('sumPill').textContent = 'Toplam ' + fmt(mt); $('sumPill').classList.toggle('warn', mt !== 100);
+}
+function renderEng() {
+  const e = ex(); $('engBtn').setAttribute('aria-pressed', e.eng ? 'true' : 'false');
+  $('engBtn').textContent = e.eng ? '✓ İngilizce hesabı açık' : '🇬🇧 İngilizce öğretmeniyim';
+  $('engBox').hidden = !e.eng;
+  document.querySelectorAll('#qpts .wt').forEach(x => x.remove());
+  if (!e.eng) return;
+  const P = engParts(e), max = k => P[k].reduce((a, i) => a + (+e.points[i] || 0), 0);
+  $('engDetail').textContent = `Yazılı: ${P.yaz.length} soru, ${fmt(max('yaz'))} puan → 50 · Konuşma: ${fmt(max('kon'))} puan → 25 · Dinleme: ${fmt(max('din'))} puan → 25`
+    + (P.dis.length ? ` · ${P.dis.map(i => colName(e, i)).join(', ')} toplama katılmıyor` : '');
+  Object.keys(P).forEach(k => P[k].forEach(i => { const c = $('pt' + i); if (c) c.insertAdjacentHTML('afterend', `<span class="wt">${k === 'yaz' ? 'Yazılı %50' : k === 'kon' ? 'Konuşma %25' : k === 'din' ? 'Dinleme %25' : 'Toplama katılmaz'}</span>`); }));
+}
+$('engBtn').onclick = () => {
+  const e = ex(); labelsOf(e);
+  if (e.eng) { e.eng = false; save(); render(); toast('İngilizce hesabı kapatıldı, toplam yeniden puanların toplamı'); return; }
+  e.eng = true;
+  const P = engParts(e), add = [];
+  if (!P.kon.length) { e.points.push(100); e.labels.push('Konuşma'); add.push('Konuşma'); }
+  if (!P.din.length) { e.points.push(100); e.labels.push('Dinleme'); add.push('Dinleme'); }
+  Object.values(e.scores).forEach(a => { while (a.length < e.points.length) a.push(null); });
+  save(); render();
+  toast(add.length ? `${add.join(' ve ')} sütunu eklendi (100 puan). Puanını değiştirebilirsin` : 'İngilizce hesabı açıldı: Yazılı %50 + Konuşma %25 + Dinleme %25');
 };
 $('evenPts').onclick = () => {
   const e = ex(), n = e.points.length, base = Math.floor(100 / n), extra = 100 - base * n;
@@ -1073,7 +1125,7 @@ pz.addEventListener('drop', ev => {
 $('sortAZ').onclick = () => { cls().students.sort((a, b) => a.name.localeCompare(b.name, 'tr')); save(); render(); };
 $('clearSample').onclick = () => { const k = cls(); clearClassStudents(k); k.sample = false; save(); render(); $('stuPanel').open = true; $('pasteZone').scrollIntoView({ block: 'center', behavior: 'smooth' }); };
 $('newExam').onclick = () => {
-  const k = cls(), e = newExamFor(k, ex().points, labelsOf(ex())); e.name = (classExams(k).length + 1) + '. Sınav';
+  const k = cls(), e = newExamFor(k, ex().points, labelsOf(ex())); e.eng = !!ex().eng; e.name = (classExams(k).length + 1) + '. Sınav';
   D.exams.push(e); D.cur = e.id; k.lastExam = e.id; cur = { r: 0, c: 0 }; save(); render();
   $('examName').focus(); $('examName').select(); toast(`${k.name} için yeni sınav açıldı`);
 };
@@ -1148,12 +1200,15 @@ function buildXlsx() {
   str(2, 0, `${st.length} öğrenci · Toplam ${fmt(maxTotal(e))} puan · ${new Date().toLocaleDateString('tr-TR')}`, 6);
   str(HEAD, 0, 'Sıra', 1); if (hasNo) str(HEAD, 1, 'Okul No', 1); str(HEAD, lead - 1, 'Öğrenci', 1);
   e.points.forEach((p, i) => str(HEAD, qc(i), `${colName(e, i)}\n(${fmt(p)} p)`, 1));
-  str(HEAD, tc, `Toplam\n(${fmt(maxTotal(e))})`, 1);
+  str(HEAD, tc, e.eng ? 'Puan (100)\nYazılı %50 · Kon. %25 · Din. %25' : `Toplam\n(${fmt(maxTotal(e))})`, 1);
   st.forEach((s, j) => {
     const r = first + j; num(r, 0, j + 1, 3); if (hasNo) { if (/^\d{1,9}$/.test(s.no || '')) num(r, 1, +s.no, 3); else str(r, 1, s.no || '', 2); } str(r, lead - 1, s.name, 2);
     s.scores.forEach((v, i) => num(r, qc(i), v, v != null && v > e.points[i] ? 8 : 3));
     const { t, n } = total(s);
-    fml(r, tc, `IF(COUNT(${ref(qc(0), r)}:${ref(qc(nq - 1), r)})=0,"",SUM(${ref(qc(0), r)}:${ref(qc(nq - 1), r)}))`, n ? Math.round(t * 100) / 100 : '', 4);
+    const rng = `${ref(qc(0), r)}:${ref(qc(nq - 1), r)}`;
+    let f = `SUM(${rng})`;
+    if (e.eng) { const P = engParts(e); f = 'ROUND(' + Object.keys(ENG_W).filter(k => P[k].length).map(k => { const mx = P[k].reduce((a, i) => a + (+e.points[i] || 0), 0); return mx ? `SUM(${P[k].map(i => ref(qc(i), r)).join(',')})/${mx}*${ENG_W[k]}` : '0'; }).join('+') + ',2)'; }
+    fml(r, tc, `IF(COUNT(${rng})=0,"",${f})`, n ? Math.round(t * 100) / 100 : '', 4);
   });
   if (st.length) {
     str(AVG, 0, '', 1); if (hasNo) str(AVG, 1, '', 1); str(AVG, lead - 1, 'Sınıf ortalaması', 1);
@@ -1165,7 +1220,7 @@ function buildXlsx() {
   }
   // sütun genişlikleri
   const wName = Math.min(40, Math.max(16, ...st.map(s => s.name.length + 2)));
-  const widths = [6, ...(hasNo ? [10] : []), wName, ...e.points.map((_, i) => Math.min(18, Math.max(8, colName(e, i).length + 2))), 10];
+  const widths = [6, ...(hasNo ? [10] : []), wName, ...e.points.map((_, i) => Math.min(18, Math.max(8, colName(e, i).length + 2))), e.eng ? 16 : 10];
   const cols = widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('');
   const rowsXml = cells.map((row, r) => row ? `<row r="${r}"${r === HEAD ? ' ht="34" customHeight="1"' : r === 1 ? ' ht="22" customHeight="1"' : ''}>${row.filter(Boolean).join('')}</row>` : '').join('');
   const lastRef = ref(tc, st.length ? AVG : HEAD);
@@ -1488,19 +1543,24 @@ const TOUR = [
   { el: '#xlsBtn', title: 'Öğrencileri Excel’den yükle', text: 'Sınıf listesini seçmen yeterli, isimler ve okul numaraları kendiliğinden alınır.<br><small>(e-Okul’dan indirdiğin öğrenci listesini kullanabilirsin.)</small>', prep: () => { $('stuPanel').open = true; } },
   { el: '#namesWrap', title: 'Ya da yazarak, konuşarak ekle', text: 'İsimleri bu kutuya yaz ya da yapıştır. <b>🎤 Konuşarak ekle</b>’ye basıp isimleri tek tek söyleyebilirsin. Sonra <b>Listeye ekle</b>’ye bas.', prep: () => { $('stuPanel').open = true; } },
   { el: '#addCols', title: 'İstediğin kadar soru ekle', text: '<b>Sorular ve puanlar</b> bölümünde <b>＋ Soru</b> ile yeni soru eklersin. İngilizce için <b>Okuma</b>, <b>Konuşma</b>, <b>Dinleme</b>, <b>Yazma</b> sütunları da var.', prep: () => { $('setPanel').open = true; } },
-  { el: '#qpts', title: 'Puanı buradan değiştir', text: 'Her sorunun altındaki kutuya o sorunun puanını yaz. Sorunun adına dokunup adını da değiştirebilirsin. Toplam 100 değilse uyarı görürsün.', prep: () => { $('setPanel').open = true; } },
+  { el: '#qpts', title: 'Puanı buradan değiştir', v: 2, text: 'Her sorunun altındaki kutuya o sorunun puanını yaz. <b>Tab</b> tuşuyla <small>(telefonda İleri ile)</small> sıradaki sorunun puanına geçersin. Toplam 100 değilse uyarı görürsün.', prep: () => { $('setPanel').open = true; } },
+  { el: '#engBtn', v: 2, title: 'İngilizce öğretmeni misin?', text: 'Bu düğmeye basınca toplam şöyle hesaplanır: <b>yazılı soruların %50’si</b> + <b>Konuşma %25</b> + <b>Dinleme %25</b>. Sınav 7 soru da olsa 9 soru da olsa sonuç 100 üzerinden çıkar.', prep: () => { $('setPanel').open = true; } },
+  { el: '#copyTo', v: 2, title: 'Puanları diğer sınıflara kopyala', text: 'Soruları ve puanları bir kez ayarla, buradan sınıfları seçip hepsine aynen aktar. Girilmiş notlar silinmez.', prep: () => { $('setPanel').open = true; } },
   { el: '#micBtn', title: 'Puanları konuşarak gir', text: 'Bir hücreye dokun, mikrofona bas ve puanları söyle: <b>“15”</b>, <b>“tam”</b>, <b>“geç”</b>. Uygulama sıradaki soruya kendisi geçer. İstersen klavyeyle de yazabilirsin.', prep: () => { scrollTo(0, 0); } },
 ];
-let tourI = 0, tourEl = null, tourOpen = null;
-function startTour() {
+const TOUR_V = 2;
+const TOUR_NEW = [{ title: 'Yenilikler ✨', text: 'Uygulamaya yeni özellikler eklendi. Kısaca gösterelim.' }, ...TOUR.filter(t => t.v === 2)];
+let tourI = 0, tourEl = null, tourOpen = null, STEPS = TOUR;
+function startTour(list) {
   if (tourEl) return;
+  STEPS = list || TOUR;
   if (listening) stopListening(); if (nameOn) stopNameMic();
   tourOpen = { stu: $('stuPanel').open, set: $('setPanel').open, more: $('morePanel').open };
   $('morePanel').open = false;
   tourEl = document.createElement('div'); tourEl.className = 'tour'; tourEl.setAttribute('role', 'dialog'); tourEl.setAttribute('aria-modal', 'true');
   tourEl.innerHTML = `<div class="shade"></div><div class="spot none"></div><div class="pointer" aria-hidden="true">👆</div>
     <div class="bub" aria-live="polite"><div class="arrow"></div><h3></h3><p></p>
-    <div class="foot"><div class="dots">${TOUR.map(() => '<i></i>').join('')}</div>
+    <div class="foot"><div class="dots">${STEPS.map(() => '<i></i>').join('')}</div>
     <button class="btn small" data-t="back">Geri</button><button class="btn small primary" data-t="next">İleri</button></div>
     <button class="skip" data-t="skip">Tanıtımı geç</button></div>`;
   document.body.appendChild(tourEl);
@@ -1511,15 +1571,15 @@ function startTour() {
 function tourKey(ev) { if (!tourEl) return; if (ev.key === 'Escape') endTour(); else if (ev.key === 'ArrowRight' || ev.key === 'Enter') { ev.preventDefault(); tourGo(tourI + 1); } else if (ev.key === 'ArrowLeft') tourGo(tourI - 1); }
 let tourT;
 function tourGo(i) {
-  if (i >= TOUR.length) { endTour(); return; }
-  tourI = Math.max(0, i); const st = TOUR[tourI];
+  if (i >= STEPS.length) { endTour(); return; }
+  tourI = Math.max(0, i); const st = STEPS[tourI];
   st.prep && st.prep();
   const bub = tourEl.querySelector('.bub');
   bub.querySelector('h3').textContent = st.title; bub.querySelector('p').innerHTML = st.text;
   tourEl.querySelectorAll('.dots i').forEach((d, k) => d.classList.toggle('on', k === tourI));
   bub.querySelector('[data-t="back"]').hidden = tourI === 0;
-  const nx = bub.querySelector('[data-t="next"]'); nx.textContent = tourI === 0 ? 'Başla' : tourI === TOUR.length - 1 ? 'Başlayalım ✓' : 'İleri';
-  bub.querySelector('[data-t="skip"]').hidden = tourI === TOUR.length - 1;
+  const nx = bub.querySelector('[data-t="next"]'); nx.textContent = tourI === 0 ? (STEPS === TOUR ? 'Başla' : 'Göster') : tourI === STEPS.length - 1 ? 'Başlayalım ✓' : 'İleri';
+  bub.querySelector('[data-t="skip"]').hidden = tourI === STEPS.length - 1;
   const el = st.el && document.querySelector(st.el);
   if (el && st.el !== '#micBtn') el.scrollIntoView({ block: 'center', inline: 'nearest' });
   tourPlace(); clearTimeout(tourT); tourT = setTimeout(tourPlace, 120);
@@ -1527,7 +1587,7 @@ function tourGo(i) {
 }
 function tourPlace() {
   if (!tourEl) return;
-  const st = TOUR[tourI], spot = tourEl.querySelector('.spot'), bub = tourEl.querySelector('.bub'), arr = bub.querySelector('.arrow'), ptr = tourEl.querySelector('.pointer');
+  const st = STEPS[tourI], spot = tourEl.querySelector('.spot'), bub = tourEl.querySelector('.bub'), arr = bub.querySelector('.arrow'), ptr = tourEl.querySelector('.pointer');
   const el = st.el && document.querySelector(st.el);
   const vw = innerWidth, vh = innerHeight, bw = bub.offsetWidth, bh = bub.offsetHeight, pad = 6;
   if (!el || !el.getClientRects().length) {
@@ -1554,11 +1614,11 @@ function endTour() {
   if (!tourEl) return;
   tourEl.remove(); tourEl = null;
   removeEventListener('keydown', tourKey); removeEventListener('resize', tourPlace); removeEventListener('scroll', tourPlace, true);
-  lsSet('spt-tour-done', '1');
+  lsSet('spt-tour-done', String(TOUR_V));
   if (tourOpen) { $('stuPanel').open = tourOpen.stu || !ex().students.length || cls().sample; $('setPanel').open = tourOpen.set; }
   scrollTo({ top: 0, behavior: 'smooth' });
 }
-$('tourBtn').onclick = () => { $('morePanel').open = false; startTour(); };
+$('tourBtn').onclick = () => { $('morePanel').open = false; startTour(TOUR); };
 /* Hakkında */
 function openAbout() { $('aboutVer').textContent = 'Sürüm ' + APP_VERSION + ' · Made by Us'; $('aboutBox').hidden = false; $('aboutClose').focus(); }
 function closeAbout() { $('aboutBox').hidden = true; $('aboutBtn').focus({ preventScroll: true }); }
@@ -1567,7 +1627,10 @@ $('aboutBox').addEventListener('click', ev => { if (ev.target === $('aboutBox'))
 addEventListener('keydown', ev => { if (ev.key === 'Escape' && !$('aboutBox').hidden) closeAbout(); });
 
 load(); render(); updateInstallUI();
-if (firstRun && !lsGet('spt-tour-done')) setTimeout(startTour, 500); else if (!lsGet('spt-tour-done')) lsSet('spt-tour-done', '1');
+{ const done = +(lsGet('spt-tour-done') || 0);
+  if (firstRun && !done) setTimeout(() => startTour(TOUR), 500);           // ilk açılış: tam tanıtım
+  else if (done && done < TOUR_V) setTimeout(() => startTour(TOUR_NEW), 700); // daha önce görenlere yalnız yenilikler
+  else if (!done) lsSet('spt-tour-done', String(TOUR_V)); }
 try { $('csvBtn').hidden = isApk() || window.self !== window.top; } catch (e) { $('csvBtn').hidden = true; }
 if (ex().students.length) $('setPanel').open = false;
 if (isApk()) setTimeout(() => { window.__live.check(APP_VERSION).then(r => { if (r.status === 'ready') showLiveNote(r.version); }).catch(() => {}); }, 2500);
