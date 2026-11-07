@@ -217,6 +217,15 @@ td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 .mcard h3{margin:0;font:800 19px/1.2 var(--display)}
 .mcard p{margin:0;font-size:15px;line-height:1.6}
 .mfoot{display:flex;align-items:center;justify-content:space-between;gap:10px}
+/* puanları sınıflara kopyalama */
+.copyto{border-top:1px solid var(--line);padding-top:12px;display:flex;flex-direction:column;gap:8px}
+.copyto>b{font-size:15px}
+.clslist{display:flex;flex-wrap:wrap;gap:8px}
+.clslist label{display:flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:999px;padding:7px 12px;cursor:pointer;font-weight:700;font-size:14px;background:var(--surface)}
+.clslist label small{font:500 12px var(--mono);color:var(--muted)}
+.clslist label:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.clslist .all{background:transparent;border-style:dashed;color:var(--accent)}
+#copyGo{align-self:flex-start}
 #toast .tact{margin-left:10px;border:0;border-radius:8px;padding:5px 10px;background:var(--accent);color:var(--surface);font:700 13px var(--body)}
 #toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
   padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
@@ -327,6 +336,12 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
         <button class="btn small" data-add="Yazma">＋ Yazma</button>
         <button class="btn small" data-add="?">＋ Diğer</button>
       </div>
+      <div class="copyto" id="copyTo">
+        <b>📋 Bu puanları diğer sınıflara kopyala</b>
+        <div class="msg" id="copyInfo"></div>
+        <div class="clslist" id="copyList"></div>
+        <button class="btn primary" id="copyGo" disabled>Seçili sınıflara kopyala</button>
+      </div>
     </div>
   </details>
 
@@ -413,7 +428,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.8.1';
+const APP_VERSION = '1.9.0';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -518,12 +533,13 @@ function render() {
   const L = labelsOf(e);
   $('qpts').innerHTML = e.points.map((p, i) => `<div class="qcol${L[i] ? ' skill' : ''}">
     <input class="qname" id="qn${i}" data-n="${i}" value="${esc(L[i])}" placeholder="${i + 1}. soru" aria-label="${i + 1}. sütunun adı" autocomplete="off">
-    <input id="pt${i}" data-i="${i}" type="number" min="0" step="0.5" inputmode="decimal" value="${p}" aria-label="${esc(colName(e, i))} puanı">
+    <input id="pt${i}" data-i="${i}" type="number" min="0" step="0.5" inputmode="decimal" enterkeyhint="${i < e.points.length - 1 ? 'next' : 'done'}" value="${p}" aria-label="${esc(colName(e, i))} puanı">
     ${e.points.length > 1 ? `<button class="rm" data-rm="${i}" aria-label="${esc(colName(e, i))} sütununu sil">×</button>` : ''}</div>`).join('');
   const mt = maxTotal(e);
   $('sumPill').textContent = 'Toplam ' + fmt(mt);
   $('sumPill').classList.toggle('warn', mt !== 100);
   $('stuCount').textContent = e.students.length + ' öğrenci';
+  renderCopy();
   renderTable();
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
@@ -762,8 +778,64 @@ $('qpts').addEventListener('click', ev => {
 $('qpts').addEventListener('change', ev => {
   if (ev.target.dataset.i == null) return;
   const i = +ev.target.dataset.i, v = parseTyped(ev.target.value), e = ex();
-  e.points[i] = Number.isNaN(v) || v == null ? 0 : v; save(); render();
+  e.points[i] = Number.isNaN(v) || v == null ? 0 : v; save();
+  if (document.activeElement !== ev.target) ev.target.value = e.points[i];
+  const mt = maxTotal(e); $('sumPill').textContent = 'Toplam ' + fmt(mt); $('sumPill').classList.toggle('warn', mt !== 100);
+  renderTable();
 });
+/* Tab / Enter: sıradaki sorunun puan kutusuna geç */
+$('qpts').addEventListener('keydown', ev => {
+  const t = ev.target; if (t.dataset.i == null) return;
+  const i = +t.dataset.i, n = ex().points.length;
+  let j = null;
+  if (ev.key === 'Tab') j = ev.shiftKey ? i - 1 : i + 1;
+  else if (ev.key === 'Enter') j = i + 1;
+  if (j == null) return;
+  if (j < 0 || j >= n) { if (ev.key === 'Enter') { ev.preventDefault(); t.blur(); } return; }
+  ev.preventDefault();
+  t.dispatchEvent(new Event('change', { bubbles: true }));
+  const nx = $('pt' + j); nx.focus(); nx.select();
+});
+/* ================= Puanları diğer sınıflara kopyala =================
+   Seçilen her sınıfta aynı adlı sınav varsa soruları ve puanları güncellenir; yoksa bu adla yeni sınav açılır.
+   Öğrencilerin girilmiş notlarına dokunulmaz. */
+const copySel = new Set();
+function renderCopy() {
+  const k = cls(), e = ex(), others = D.classes.filter(c => c.id !== k.id);
+  [...copySel].forEach(id => { if (!others.some(c => c.id === id)) copySel.delete(id); });
+  if (!others.length) {
+    $('copyInfo').innerHTML = 'Başka sınıf yok. Önce yukarıdaki <b>＋ Sınıf ekle</b> ile sınıf aç.';
+    $('copyList').innerHTML = ''; $('copyGo').hidden = true; return;
+  }
+  $('copyGo').hidden = false;
+  $('copyInfo').textContent = `“${e.name || 'Bu sınav'}” sınavının soruları ve puanları (${e.points.length} soru, toplam ${fmt(maxTotal(e))}) seçtiğin sınıflara aynen aktarılır.`;
+  $('copyList').innerHTML = others.map(c => `<label><input type="checkbox" data-copy="${c.id}" ${copySel.has(c.id) ? 'checked' : ''}> ${esc(c.name || 'Adsız sınıf')} <small>${c.students.length}</small></label>`).join('')
+    + (others.length > 1 ? `<label class="all"><input type="checkbox" data-copy="*" ${others.every(c => copySel.has(c.id)) ? 'checked' : ''}> Tümü</label>` : '');
+  $('copyGo').disabled = !copySel.size;
+  $('copyGo').textContent = copySel.size ? `${copySel.size} sınıfa kopyala` : 'Seçili sınıflara kopyala';
+}
+$('copyList').addEventListener('change', ev => {
+  const id = ev.target.dataset.copy; if (!id) return;
+  const others = D.classes.filter(c => c.id !== D.curClass);
+  if (id === '*') others.forEach(c => ev.target.checked ? copySel.add(c.id) : copySel.delete(c.id));
+  else ev.target.checked ? copySel.add(id) : copySel.delete(id);
+  renderCopy();
+});
+$('copyGo').onclick = () => {
+  const e = ex(), L = labelsOf(e).slice(), done = [];
+  D.classes.filter(c => copySel.has(c.id) && c.id !== D.curClass).forEach(k => {
+    const exams = classExams(k);
+    let t = exams.find(x => norm(x.name || '') === norm(e.name || ''));
+    const blank = x => !Object.values(x.scores || {}).some(a => (a || []).some(v => v != null));
+    if (!t && exams.length === 1 && blank(exams[0]) && /^\d+\. sınav$/i.test(exams[0].name || '')) t = exams[0];
+    if (!t) { t = newExamFor(k, e.points, L); D.exams.push(t); }
+    t.name = e.name; t.points = e.points.slice(); t.labels = L.slice();
+    Object.values(t.scores).forEach(a => { while (a.length < t.points.length) a.push(null); a.length = t.points.length; });
+    k.lastExam = t.id; done.push(k.name || 'Adsız sınıf');
+  });
+  copySel.clear(); save(); renderCopy();
+  if (done.length) toast('✓ Puanlar kopyalandı: ' + done.join(', '));
+};
 $('evenPts').onclick = () => {
   const e = ex(), n = e.points.length, base = Math.floor(100 / n), extra = 100 - base * n;
   e.points = e.points.map((_, i) => base + (i >= n - extra ? 1 : 0)); save(); render(); toast('Puanlar eşit dağıtıldı');
