@@ -180,6 +180,35 @@ tfoot .pct{display:block;font-size:11px;font-weight:500}
 td.name .okno{font:500 11px var(--mono);color:var(--muted);flex:none}
 #sign{position:fixed;right:12px;bottom:8px;font:700 12px var(--body);color:var(--ink);opacity:.45;pointer-events:none;z-index:50;
   margin-bottom:env(safe-area-inset-bottom,0px);margin-right:env(safe-area-inset-right,0px)}
+/* isimleri sesle ekleme */
+.nameswrap{display:flex;flex-direction:column;gap:10px}
+.namebtns{display:flex;gap:8px;flex-wrap:wrap}
+.namebtns .btn.big{flex:1 1 150px;width:auto}
+#nameMic.on{background:var(--red);border-color:var(--red);color:var(--surface)}
+/* tanıtım turu */
+.tour{position:fixed;inset:0;z-index:100}
+.tour .shade{position:absolute;inset:0}
+.tour .spot{position:absolute;border-radius:14px;box-shadow:0 0 0 3px var(--accent),0 0 0 9999px rgba(10,16,28,.62);transition:all .3s ease;pointer-events:none}
+.tour .spot.none{box-shadow:0 0 0 9999px rgba(10,16,28,.62);width:0;height:0;left:50%;top:40%}
+.tour .bub{position:absolute;width:min(340px,calc(100vw - 32px));background:var(--surface);color:var(--ink);border-radius:16px;padding:16px 16px 12px;
+  box-shadow:0 18px 40px -12px rgba(0,0,0,.5);display:flex;flex-direction:column;gap:10px;transition:top .3s ease,left .3s ease}
+.tour .bub h3{margin:0;font:800 19px/1.2 var(--display);text-wrap:balance}
+.tour .bub p{margin:0;font-size:15px;line-height:1.5;color:var(--ink)}
+.tour .bub p small{color:var(--muted);font-size:13px}
+.tour .arrow{position:absolute;width:18px;height:18px;background:var(--surface);transform:rotate(45deg);border-radius:3px}
+.tour .bub.below .arrow{top:-8px}
+.tour .bub.above .arrow{bottom:-8px}
+.tour .bub.center .arrow{display:none}
+.tour .pointer{position:absolute;font-size:30px;line-height:1;pointer-events:none;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4));animation:tourbob 1s ease-in-out infinite}
+@keyframes tourbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+.tour .pointer.up{animation-name:tourbobup}
+@keyframes tourbobup{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
+@media (prefers-reduced-motion:reduce){.tour .pointer{animation:none}.tour .spot,.tour .bub{transition:none}}
+.tour .foot{display:flex;align-items:center;gap:8px}
+.tour .dots{display:flex;gap:5px;flex:1}
+.tour .dots i{width:7px;height:7px;border-radius:50%;background:var(--line)}
+.tour .dots i.on{background:var(--accent);width:18px;border-radius:4px}
+.tour .skip{border:0;background:none;color:var(--muted);font:700 13px var(--body);padding:6px 4px;cursor:pointer;text-decoration:underline}
 #toast .tact{margin-left:10px;border:0;border-radius:8px;padding:5px 10px;background:var(--accent);color:var(--surface);font:700 13px var(--body)}
 #toast{position:fixed;left:50%;bottom:calc(36px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--surface);
   padding:9px 14px;border-radius:10px;font-weight:700;font-size:14px;z-index:60;max-width:calc(100% - 32px)}
@@ -247,8 +276,14 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
         <button class="btn primary big" id="xlsBtn">📊 Excel dosyasından ekle</button>
         <input type="file" id="xlsIn" accept=".xlsx,.xls,.ods,.csv,.txt,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
         <div class="or"><span>ya da</span></div>
-        <textarea id="namesIn" aria-label="Öğrenci isimleri" placeholder="İsimleri buraya yapıştır ya da yaz (her satıra bir isim)"></textarea>
-        <button class="btn primary big" id="addNames">➕ Listeye ekle</button>
+        <div class="nameswrap" id="namesWrap">
+          <textarea id="namesIn" aria-label="Öğrenci isimleri" placeholder="İsimleri buraya yapıştır, yaz ya da 🎤 ile söyle (her satıra bir isim)"></textarea>
+          <div class="namebtns">
+            <button class="btn big" id="nameMic" aria-label="İsimleri konuşarak ekle">🎤 Konuşarak ekle</button>
+            <button class="btn primary big" id="addNames">➕ Listeye ekle</button>
+          </div>
+          <div class="msg" id="nameMicMsg" hidden></div>
+        </div>
       </div>
       <div class="pv" id="pv" hidden>
         <div class="pvhead"><span style="display:flex;flex-direction:column;min-width:0"><b id="pvTitle"></b><span class="pvsrc" id="pvSrc" hidden></span></span>
@@ -293,6 +328,7 @@ header.top #examName{font:800 clamp(22px,5vw,30px)/1.15 var(--display);border:0;
       <div class="row">
         <button class="btn small" id="updBtn">🔄 Güncelle</button>
         <button class="btn small" id="installBtn" hidden>💻 Bilgisayara yükle</button>
+        <button class="btn small" id="tourBtn">👋 Tanıtımı göster</button>
         <button class="btn small" id="csvBtn">⬇ Excel dosyası indir</button>
       </div>
       <div class="help" id="installHelp" hidden></div>
@@ -361,7 +397,7 @@ if (!window.__live) window.__live = (function () {
 </script>
 <script>
 main: {
-const APP_VERSION = '1.7.0';
+const APP_VERSION = '1.8.0';
 if (window.__live && window.__live.start(APP_VERSION)) break main;
 const GITHUB_USER = 'ekerem', REPO_NAME = 'sinav-puan-tablosu';
 const PAGES_BASE = `https://${GITHUB_USER}.github.io/${REPO_NAME}/`;
@@ -406,7 +442,9 @@ function migrate(old) {
   return N;
 }
 let D;
+let firstRun = false;
 function load() {
+  try { firstRun = !localStorage.getItem(KEY); } catch (e) { firstRun = false; }
   let raw = null;
   try { raw = JSON.parse(localStorage.getItem(KEY)); } catch (e) { raw = null; }
   if (raw && Array.isArray(raw.exams) && !raw.classes) raw = migrate(raw);
@@ -1317,7 +1355,125 @@ $('installBtn').onclick = doInstall; $('installBtn2').onclick = doInstall;
 $('installLater').onclick = () => { lsSet('spt-install-later', '1'); updateInstallUI(); toast('Diğer bölümünden istediğin zaman yükleyebilirsin'); };
 if (isStandalone()) document.documentElement.classList.add('app-window');
 
+/* ================= İsimleri konuşarak ekleme ================= */
+let nameRec = null, nameOn = false;
+function nameMsg(t) { const m = $('nameMicMsg'); m.hidden = !t; m.textContent = t || ''; }
+function addSpokenName(txt) {
+  const n = String(txt || '').replace(/[.,!?;:]+/g, ' ').replace(/\s+/g, ' ').trim(); if (!n) return;
+  if (/^(dur|bitti|tamam|kapat)$/i.test(lower(n))) { stopNameMic(); return; }
+  const nm = n.split(' ').map(w => w ? w[0].toLocaleUpperCase('tr') + w.slice(1) : w).join(' ');
+  const ta = $('namesIn'); ta.value = (ta.value.trim() ? ta.value.replace(/\s+$/, '') + '\n' : '') + nm; ta.scrollTop = ta.scrollHeight;
+  nameMsg('✓ ' + nm + ' · sıradaki ismi söyle ya da “Listeye ekle”ye bas');
+}
+function setNameOn(on) { nameOn = on; $('nameMic').classList.toggle('on', on); $('nameMic').textContent = on ? '⏹ Dinlemeyi bitir' : '🎤 Konuşarak ekle'; }
+async function startNameMic() {
+  if (listening) stopListening();
+  const nat = isApk() && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition;
+  if (nat) {
+    try { const av = await nat.available(); if (!av.available) throw 0; const pr = await nat.requestPermissions(); if (pr.speechRecognition && pr.speechRecognition !== 'granted') { nameMsg('Mikrofon izni verilmedi'); return; } }
+    catch (e) { nameMsg('Bu cihazda ses tanıma bulunamadı'); return; }
+    setNameOn(true); nameMsg('Dinliyorum… öğrencinin adını ve soyadını söyle');
+    while (nameOn) { try { const r = await nat.start({ language: 'tr-TR', maxResults: 1, partialResults: false, popup: false, prompt: '' }); if (nameOn && r && r.matches && r.matches[0]) addSpokenName(r.matches[0]); } catch (e) { await new Promise(r => setTimeout(r, 300)); } }
+    return;
+  }
+  if (!SR) { nameMsg('Bu tarayıcıda ses tanıma yok. Chrome ya da Edge ile aç.'); return; }
+  nameRec = new SR(); nameRec.lang = 'tr-TR'; nameRec.continuous = true; nameRec.interimResults = true;
+  nameRec.onresult = ev => { for (let i = ev.resultIndex; i < ev.results.length; i++) { const r = ev.results[i]; if (r.isFinal) addSpokenName(r[0].transcript); else nameMsg('… ' + r[0].transcript); } };
+  nameRec.onerror = ev => { if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') { nameMsg('Mikrofon izni verilmedi. Adres çubuğundaki kilit simgesinden izin ver.'); stopNameMic(); } else if (ev.error === 'network') { nameMsg('Ses tanıma için internet gerekiyor'); stopNameMic(); } };
+  nameRec.onend = () => { if (nameOn) { try { nameRec.start(); } catch (e) {} } };
+  try { nameRec.start(); setNameOn(true); nameMsg('Dinliyorum… öğrencinin adını ve soyadını söyle'); } catch (e) { nameMsg('Mikrofon açılamadı'); }
+}
+function stopNameMic() {
+  setNameOn(false);
+  try { nameRec && nameRec.stop(); } catch (e) {}
+  try { const nat = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SpeechRecognition; nat && isApk() && nat.stop(); } catch (e) {}
+  if ($('namesIn').value.trim()) nameMsg('İsimler kutuda. Kontrol et ve “Listeye ekle”ye bas.'); else nameMsg('');
+}
+$('nameMic').onclick = () => nameOn ? stopNameMic() : startNameMic();
+$('addNames').addEventListener('click', () => { if (nameOn) stopNameMic(); nameMsg(''); }, true);
+
+/* ================= İlk açılış tanıtımı =================
+   İlk kez açana bir kez gösterilir (Diğer → Tanıtımı göster ile yeniden açılır). */
+const TOUR = [
+  { title: 'Hoş geldin! 👋', text: 'Sınav puanlarını soru soru gir, toplamı ve sınıf ortalamasını uygulama hesaplasın. Birkaç adımda nasıl kullanılacağını gösterelim.' },
+  { el: '#addClass', title: 'Önce sınıfını ekle', text: 'Buradan yeni bir sınıf aç. Sınıfın adını değiştirmek için sekmeye <b>çift tıkla</b> <small>(telefonda basılı tut)</small>.', prep: () => { const b = $('addClass'); b && b.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } },
+  { el: '#xlsBtn', title: 'Öğrencileri Excel’den yükle', text: 'Sınıf listesini seçmen yeterli, isimler ve okul numaraları kendiliğinden alınır.<br><small>(e-Okul’dan indirdiğin öğrenci listesini kullanabilirsin.)</small>', prep: () => { $('stuPanel').open = true; } },
+  { el: '#namesWrap', title: 'Ya da yazarak, konuşarak ekle', text: 'İsimleri bu kutuya yaz ya da yapıştır. <b>🎤 Konuşarak ekle</b>’ye basıp isimleri tek tek söyleyebilirsin. Sonra <b>Listeye ekle</b>’ye bas.', prep: () => { $('stuPanel').open = true; } },
+  { el: '#addCols', title: 'İstediğin kadar soru ekle', text: '<b>Sorular ve puanlar</b> bölümünde <b>＋ Soru</b> ile yeni soru eklersin. İngilizce için <b>Okuma</b>, <b>Konuşma</b>, <b>Dinleme</b>, <b>Yazma</b> sütunları da var.', prep: () => { $('setPanel').open = true; } },
+  { el: '#qpts', title: 'Puanı buradan değiştir', text: 'Her sorunun altındaki kutuya o sorunun puanını yaz. Sorunun adına dokunup adını da değiştirebilirsin. Toplam 100 değilse uyarı görürsün.', prep: () => { $('setPanel').open = true; } },
+  { el: '#micBtn', title: 'Puanları konuşarak gir', text: 'Bir hücreye dokun, mikrofona bas ve puanları söyle: <b>“15”</b>, <b>“tam”</b>, <b>“geç”</b>. Uygulama sıradaki soruya kendisi geçer. İstersen klavyeyle de yazabilirsin.', prep: () => { scrollTo(0, 0); } },
+];
+let tourI = 0, tourEl = null, tourOpen = null;
+function startTour() {
+  if (tourEl) return;
+  if (listening) stopListening(); if (nameOn) stopNameMic();
+  tourOpen = { stu: $('stuPanel').open, set: $('setPanel').open, more: $('morePanel').open };
+  $('morePanel').open = false;
+  tourEl = document.createElement('div'); tourEl.className = 'tour'; tourEl.setAttribute('role', 'dialog'); tourEl.setAttribute('aria-modal', 'true');
+  tourEl.innerHTML = `<div class="shade"></div><div class="spot none"></div><div class="pointer" aria-hidden="true">👆</div>
+    <div class="bub" aria-live="polite"><div class="arrow"></div><h3></h3><p></p>
+    <div class="foot"><div class="dots">${TOUR.map(() => '<i></i>').join('')}</div>
+    <button class="btn small" data-t="back">Geri</button><button class="btn small primary" data-t="next">İleri</button></div>
+    <button class="skip" data-t="skip">Tanıtımı geç</button></div>`;
+  document.body.appendChild(tourEl);
+  tourEl.addEventListener('click', ev => { const b = ev.target.closest('[data-t]'); if (!b) return; const t = b.dataset.t; if (t === 'next') tourGo(tourI + 1); else if (t === 'back') tourGo(tourI - 1); else endTour(); });
+  addEventListener('keydown', tourKey); addEventListener('resize', tourPlace); addEventListener('scroll', tourPlace, true);
+  tourGo(0);
+}
+function tourKey(ev) { if (!tourEl) return; if (ev.key === 'Escape') endTour(); else if (ev.key === 'ArrowRight' || ev.key === 'Enter') { ev.preventDefault(); tourGo(tourI + 1); } else if (ev.key === 'ArrowLeft') tourGo(tourI - 1); }
+let tourT;
+function tourGo(i) {
+  if (i >= TOUR.length) { endTour(); return; }
+  tourI = Math.max(0, i); const st = TOUR[tourI];
+  st.prep && st.prep();
+  const bub = tourEl.querySelector('.bub');
+  bub.querySelector('h3').textContent = st.title; bub.querySelector('p').innerHTML = st.text;
+  tourEl.querySelectorAll('.dots i').forEach((d, k) => d.classList.toggle('on', k === tourI));
+  bub.querySelector('[data-t="back"]').hidden = tourI === 0;
+  const nx = bub.querySelector('[data-t="next"]'); nx.textContent = tourI === 0 ? 'Başla' : tourI === TOUR.length - 1 ? 'Başlayalım ✓' : 'İleri';
+  bub.querySelector('[data-t="skip"]').hidden = tourI === TOUR.length - 1;
+  const el = st.el && document.querySelector(st.el);
+  if (el && st.el !== '#micBtn') el.scrollIntoView({ block: 'center', inline: 'nearest' });
+  tourPlace(); clearTimeout(tourT); tourT = setTimeout(tourPlace, 120);
+  nx.focus({ preventScroll: true });
+}
+function tourPlace() {
+  if (!tourEl) return;
+  const st = TOUR[tourI], spot = tourEl.querySelector('.spot'), bub = tourEl.querySelector('.bub'), arr = bub.querySelector('.arrow'), ptr = tourEl.querySelector('.pointer');
+  const el = st.el && document.querySelector(st.el);
+  const vw = innerWidth, vh = innerHeight, bw = bub.offsetWidth, bh = bub.offsetHeight, pad = 6;
+  if (!el || !el.getClientRects().length) {
+    spot.className = 'spot none'; spot.removeAttribute('style'); ptr.hidden = true;
+    bub.className = 'bub center'; bub.style.left = Math.max(16, (vw - bw) / 2) + 'px'; bub.style.top = Math.max(16, (vh - bh) / 2) + 'px'; return;
+  }
+  let r = el.getBoundingClientRect();
+  const top = Math.max(r.top - pad, 4), bottom = Math.min(r.bottom + pad, vh - 4);
+  spot.className = 'spot';
+  Object.assign(spot.style, { left: (r.left - pad) + 'px', top: top + 'px', width: (r.width + pad * 2) + 'px', height: Math.max(0, bottom - top) + 'px' });
+  const cx = Math.min(Math.max(r.left + r.width / 2, 24), vw - 24);
+  const gap = 46, spaceBelow = vh - bottom, spaceAbove = top;
+  const below = spaceBelow >= bh + gap + 8 || spaceBelow >= spaceAbove;
+  let bt = below ? bottom + gap : top - gap - bh;
+  bt = Math.min(Math.max(bt, 12), vh - bh - 12);
+  const bl = Math.min(Math.max(cx - bw / 2, 16), vw - bw - 16);
+  bub.className = 'bub ' + (below ? 'below' : 'above');
+  bub.style.left = bl + 'px'; bub.style.top = bt + 'px';
+  arr.style.left = Math.min(Math.max(cx - bl - 9, 16), bw - 34) + 'px';
+  ptr.hidden = false; ptr.textContent = below ? '👆' : '👇'; ptr.className = 'pointer' + (below ? '' : ' up');
+  ptr.style.left = (cx - 15) + 'px'; ptr.style.top = (below ? bottom + 6 : top - 40) + 'px';
+}
+function endTour() {
+  if (!tourEl) return;
+  tourEl.remove(); tourEl = null;
+  removeEventListener('keydown', tourKey); removeEventListener('resize', tourPlace); removeEventListener('scroll', tourPlace, true);
+  lsSet('spt-tour-done', '1');
+  if (tourOpen) { $('stuPanel').open = tourOpen.stu || !ex().students.length || cls().sample; $('setPanel').open = tourOpen.set; }
+  scrollTo({ top: 0, behavior: 'smooth' });
+}
+$('tourBtn').onclick = () => { $('morePanel').open = false; startTour(); };
+
 load(); render(); updateInstallUI();
+if (firstRun && !lsGet('spt-tour-done')) setTimeout(startTour, 500); else if (!lsGet('spt-tour-done')) lsSet('spt-tour-done', '1');
 try { $('csvBtn').hidden = isApk() || window.self !== window.top; } catch (e) { $('csvBtn').hidden = true; }
 if (ex().students.length) $('setPanel').open = false;
 if (isApk()) setTimeout(() => { window.__live.check(APP_VERSION).then(r => { if (r.status === 'ready') showLiveNote(r.version); }).catch(() => {}); }, 2500);
