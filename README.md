@@ -36,4 +36,9 @@ Sorunun puanından büyük sayı yazılmaz. Web'de Chrome'un ses tanıması, APK
 `web/index.html` içindeki `APP_VERSION` ve `web/version.json` içindeki `version` aynı anda artırılır ve `main`'e gönderilir.
 Pages iş akışı yayınlar; APK iş akışı yeni kurulumlar için `v1.x.y` Release'ini de oluşturur.
 
+## Lisans
+Bu program Eyüp USLU tarafından geliştirilmiş olup tüm hakları saklıdır. Öğretmenlerin ve eğitim kurumlarının
+kullanımı için tamamen ücretsizdir. Kaynak kodları değiştirilemez, ticari amaçla satılamaz veya çoğaltılamaz.
+Ayrıntılar için [LICENSE](LICENSE) dosyasına bakın.
+
 Made by Us
